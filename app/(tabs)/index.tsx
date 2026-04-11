@@ -431,11 +431,12 @@ export default function HomeScreen() {
                 <List.Item
                   title={`${item.asignation_type.type_name}`}
                   description={
-                    `${item.person.name}` +
-                    (item.helper ? ` (Ayudante: ${item.helper.name})` : '') +
-                    ` - ${item.room_display} - Estado: ${item.attended_display || 'PENDIENTE'}` +
-                    ` - ${item.asignation_date}`
+                    `${item.person.name}${item.helper ? ` (Ayudante: ${item.helper.name})` : ''}\n` +
+                    `Sala: ${item.room_display}\n` +
+                    `Estado: ${item.attended_display || 'PENDIENTE'}\n` +
+                    `Fecha: ${item.asignation_date}`
                   }
+                  descriptionNumberOfLines={6}
                   left={(props) => <List.Icon {...props} icon={icon} color={iconColor} />}
                   right={(props) => <List.Icon {...props} icon="chevron-right" color={palette.icon} />}
                   style={styles.asignationItem}
