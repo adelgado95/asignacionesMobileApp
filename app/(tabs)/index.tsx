@@ -1,8 +1,41 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { ActivityIndicator, Button, List, Menu, Modal, Portal, Text, TextInput, Title } from 'react-native-paper';
+import {
+    ActivityIndicator,
+    Button,
+    List,
+    Menu,
+    Modal,
+    Portal,
+    Text,
+    TextInput,
+    Title,
+} from 'react-native-paper';
 
-import { ThemedView } from '@/components/ThemedView';
+import { Colors } from '@/constants/Colors';
+
+type AttendedValue = 'pendiente' | 'Asistio' | 'no asistio';
+
+type AsignationType = {
+  type_name: string;
+};
+
+type PersonType = {
+  name: string;
+};
+
+type Asignation = {
+  id: number;
+  asignation_date: string;
+  asignation_type: AsignationType;
+  person: PersonType;
+  helper?: PersonType | null;
+  room_display: string;
+  attended_display?: string;
+  asignation_number_display: string;
+  notes?: string;
+  attended?: AttendedValue;
+};
 
 const MONTHS = [
   { label: 'Enero', value: 1 },
@@ -21,41 +54,41 @@ const MONTHS = [
 
 const YEARS = [2024, 2025, 2026];
 
-const ATTENDED_CHOICES = [
+const ATTENDED_CHOICES: { value: AttendedValue; label: string }[] = [
   { value: 'pendiente', label: 'PENDIENTE' },
   { value: 'Asistio', label: 'ASISTIO' },
   { value: 'no asistio', label: 'NO ASISTIO' },
 ];
 
+const today = new Date();
+const CURRENT_MONTH = today.getMonth() + 1;
+const CURRENT_YEAR = today.getFullYear();
+
+const palette = Colors.light;
+
 export default function HomeScreen() {
-  const [data, setData] = useState([]);
+  const [data, setData] = useState<Asignation[]>([]);
   const [loading, setLoading] = useState(true);
   const [visible, setVisible] = useState(false);
 
-  // Add month/year state
-  const [month, setMonth] = useState(8);
-  const [year, setYear] = useState(2025);
+  const [month, setMonth] = useState(CURRENT_MONTH);
+  const [year, setYear] = useState(CURRENT_YEAR);
 
-  // Room filter state
   const [roomMenuVisible, setRoomMenuVisible] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState<string | null>(null);
 
-  // Day filter state
   const [dayMenuVisible, setDayMenuVisible] = useState(false);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
-  // Menu state
   const [monthMenuVisible, setMonthMenuVisible] = useState(false);
   const [yearMenuVisible, setYearMenuVisible] = useState(false);
 
-  const [selectedItem, setSelectedItem] = useState<any>(null);
+  const [selectedItem, setSelectedItem] = useState<Asignation | null>(null);
   const [editNotes, setEditNotes] = useState('');
-  const [editAttended, setEditAttended] = useState('pendiente');
-
-  // Add this state at the top with your other states:
+  const [editAttended, setEditAttended] = useState<AttendedValue>('pendiente');
   const [attendedMenuVisible, setAttendedMenuVisible] = useState(false);
 
-  const showModal = (item?: any) => {
+  const showModal = (item?: Asignation) => {
     if (item) {
       setSelectedItem(item);
       setEditNotes(item.notes || '');
@@ -63,21 +96,26 @@ export default function HomeScreen() {
     }
     setVisible(true);
   };
+
   const hideModal = () => {
     setVisible(false);
     setSelectedItem(null);
   };
 
-  // Add this function above useEffect:
-  const loadData = () => {
+  const loadData = async () => {
     setLoading(true);
-    fetch(`https://central.admincong.online/api/asignations-by-month/?format=json&month=${month}&year=${year}`)
-      .then((res) => res.json())
-      .then((json) => {
-        setData(json);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
+
+    try {
+      const res = await fetch(
+        `https://central.admincong.online/api/asignations-by-month/?format=json&month=${month}&year=${year}`
+      );
+      const json = await res.json();
+      setData(Array.isArray(json) ? json : []);
+    } catch {
+      setData([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -86,6 +124,7 @@ export default function HomeScreen() {
 
   const handlePatch = async () => {
     if (!selectedItem) return;
+
     try {
       await fetch(`https://central.admincong.online/api/asignations-edit/${selectedItem.id}/`, {
         method: 'PATCH',
@@ -97,283 +136,502 @@ export default function HomeScreen() {
           attended: editAttended,
         }),
       });
-      setVisible(false);
-      setSelectedItem(null);
-      loadData(); // <-- Reload data for current month after PATCH
-    } catch (e) {
-      // Handle error
+      hideModal();
+      loadData();
+    } catch {
+      // Keep existing behavior: silently ignore errors in this patch workflow.
     }
   };
 
-  // Get unique room_display values for the room filter
-  const roomOptions = Array.from(new Set(data.map((item: any) => item.room_display)));
+  const roomOptions = useMemo(
+    () => Array.from(new Set(data.map((item) => item.room_display))),
+    [data]
+  );
 
-  // Get unique days for the day selector
-  const dayOptions = Array.from(new Set(data.map((item: any) => item.asignation_date)));
+  const dayOptions = useMemo(
+    () => Array.from(new Set(data.map((item) => item.asignation_date))),
+    [data]
+  );
 
-  // Filter data by selected room and day if any
-  let filteredData = data;
-  if (selectedRoom) {
-    filteredData = filteredData.filter((item: any) => item.room_display === selectedRoom);
-  }
-  if (selectedDay) {
-    filteredData = filteredData.filter((item: any) => item.asignation_date === selectedDay);
-  }
+  const filteredData = useMemo(() => {
+    return data.filter((item) => {
+      const roomMatches = selectedRoom ? item.room_display === selectedRoom : true;
+      const dayMatches = selectedDay ? item.asignation_date === selectedDay : true;
+      return roomMatches && dayMatches;
+    });
+  }, [data, selectedDay, selectedRoom]);
+
+  const monthLabel = MONTHS.find((m) => m.value === month)?.label || 'Mes';
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: '#fff' }}>
-      <View style={{ marginTop: 32 }}>
-        <Portal>
-          <Modal visible={visible} onDismiss={hideModal} contentContainerStyle={{ backgroundColor: 'white', padding: 20, borderRadius: 8 }}>
-            {selectedItem && (
-              <View>
-                <Title style={{ textAlign: 'center', marginBottom: 8, color: 'black', fontWeight: 'bold' }}>
-                  Detalle de Asignación
-                </Title>
-                <Text style={{ color: 'black' }}>
-                  Fecha: <Text style={{ fontWeight: 'bold', color: 'black' }}>{selectedItem.asignation_date}</Text>
+    <ScrollView style={styles.page} contentContainerStyle={styles.pageContent}>
+      <Portal>
+        <Modal visible={visible} onDismiss={hideModal} contentContainerStyle={styles.modalContainer}>
+          {selectedItem && (
+            <View>
+              <Title style={styles.modalTitle}>Detalle de Asignacion</Title>
+
+              <Text style={styles.modalText}>
+                Fecha: <Text style={styles.modalStrong}>{selectedItem.asignation_date}</Text>
+              </Text>
+              <Text style={styles.modalText}>
+                Tipo: <Text style={styles.modalStrong}>{selectedItem.asignation_type.type_name}</Text>
+              </Text>
+              <Text style={styles.modalText}>
+                Persona: <Text style={styles.modalStrong}>{selectedItem.person.name}</Text>
+              </Text>
+              <Text style={styles.modalText}>
+                Ayudante:{' '}
+                <Text style={styles.modalStrong}>
+                  {selectedItem.helper ? selectedItem.helper.name : 'Sin ayudante'}
                 </Text>
-                <Text style={{ color: 'black' }}>
-                  Tipo: <Text style={{ fontWeight: 'bold', color: 'black' }}>{selectedItem.asignation_type.type_name}</Text>
-                </Text>
-                <Text style={{ color: 'black' }}>
-                  Persona: <Text style={{ fontWeight: 'bold', color: 'black' }}>{selectedItem.person.name}</Text>
-                </Text>
-                <Text style={{ color: 'black' }}>
-                  Ayudante: <Text style={{ fontWeight: 'bold', color: 'black' }}>{selectedItem.helper ? selectedItem.helper.name : 'Sin ayudante'}</Text>
-                </Text>
-                <Text style={{ color: 'black' }}>
-                  Sala: <Text style={{ fontWeight: 'bold', color: 'black' }}>{selectedItem.room_display}</Text>
-                </Text>
-                <Text style={{ color: 'black' }}>
-                  Número: <Text style={{ fontWeight: 'bold', color: 'black' }}>{selectedItem.asignation_number_display}</Text>
-                </Text>
-                <Text style={{ marginTop: 12, color: 'black' }}>Estado:</Text>
-                <Menu
-                  visible={attendedMenuVisible}
-                  onDismiss={() => setAttendedMenuVisible(false)}
-                  anchor={
-                    <Button mode="outlined" onPress={() => setAttendedMenuVisible(true)}>
-                      <Text style={{ color: 'black', fontWeight: 'bold' }}>
-                        {ATTENDED_CHOICES.find(a => a.value === editAttended)?.label || 'Estado'}
-                      </Text>
-                    </Button>
-                  }
-                >
-                  {ATTENDED_CHOICES.map(a => (
-                    <Menu.Item
-                      key={a.value}
-                      onPress={() => {
-                        setEditAttended(a.value);
-                        setAttendedMenuVisible(false);
-                      }}
-                      title={a.label}
-                      titleStyle={{ color: 'black', fontWeight: 'bold' }}
-                    />
-                  ))}
-                </Menu>
-                <Text style={{ marginTop: 12, color: 'black' }}>Notas:</Text>
-                <TextInput
-                  value={editNotes}
-                  onChangeText={setEditNotes}
-                  multiline
-                  mode="outlined"
-                  style={{ marginBottom: 12, backgroundColor: 'white', color: 'black' }}
-                  theme={{ colors: { text: 'black' } }}
-                />
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 20 }}>
-                  <Button mode="contained" onPress={handlePatch} style={{ flex: 1, marginRight: 8 }}>
-                    Accept
+              </Text>
+              <Text style={styles.modalText}>
+                Sala: <Text style={styles.modalStrong}>{selectedItem.room_display}</Text>
+              </Text>
+              <Text style={styles.modalText}>
+                Numero: <Text style={styles.modalStrong}>{selectedItem.asignation_number_display}</Text>
+              </Text>
+
+              <Text style={styles.fieldLabel}>Estado</Text>
+              <Menu
+                visible={attendedMenuVisible}
+                onDismiss={() => setAttendedMenuVisible(false)}
+                anchor={
+                  <Button
+                    mode="outlined"
+                    onPress={() => setAttendedMenuVisible(true)}
+                    style={styles.fieldButton}
+                    labelStyle={styles.fieldButtonLabel}>
+                    {ATTENDED_CHOICES.find((a) => a.value === editAttended)?.label || 'Estado'}
                   </Button>
-                  <Button mode="outlined" onPress={hideModal} style={{ flex: 1, marginLeft: 8 }}>
-                    Close
-                  </Button>
-                </View>
+                }>
+                {ATTENDED_CHOICES.map((option) => (
+                  <Menu.Item
+                    key={option.value}
+                    onPress={() => {
+                      setEditAttended(option.value);
+                      setAttendedMenuVisible(false);
+                    }}
+                    title={option.label}
+                  />
+                ))}
+              </Menu>
+
+              <Text style={styles.fieldLabel}>Notas</Text>
+              <TextInput
+                value={editNotes}
+                onChangeText={setEditNotes}
+                multiline
+                mode="outlined"
+                style={styles.notesInput}
+                outlineColor={palette.border}
+                activeOutlineColor={palette.primary}
+              />
+
+              <View style={styles.modalActions}>
+                <Button mode="contained" onPress={handlePatch} style={styles.actionButton}>
+                  Guardar
+                </Button>
+                <Button mode="outlined" onPress={hideModal} style={styles.actionButton}>
+                  Cerrar
+                </Button>
               </View>
-            )}
-          </Modal>
-        </Portal>
-        <ThemedView style={styles.titleContainer}>
-   
-        </ThemedView>
-        {/* ComboBox Selectors for Month, Year, Room, and Day */}
-        <View style={{
-          flexDirection: 'row',
-          marginVertical: 12,
-          gap: 12,
-          justifyContent: 'center',
-          alignItems: 'center',
-          alignSelf: 'center',
-        }}>
-          {/* Month Selector */}
-          <Menu
-            visible={monthMenuVisible}
-            onDismiss={() => setMonthMenuVisible(false)}
-            anchor={
-              <Button mode="outlined" onPress={() => setMonthMenuVisible(true)}>
-                <Text style={{ color: 'black', fontWeight: 'bold' }}>
-                  {MONTHS.find(m => m.value === month)?.label || 'Mes'}
-                </Text>
-              </Button>
-            }
-          >
-            {MONTHS.map(m => (
-              <Menu.Item
-                key={m.value}
-                onPress={() => {
-                  setMonth(m.value);
-                  setSelectedDay(null);      // Reset day selection
-                  setSelectedRoom(null);     // Reset room selection
-                  setMonthMenuVisible(false);
-                }}
-                title={m.label}
-                titleStyle={{ color: 'black', fontWeight: 'bold' }}
-              />
-            ))}
-          </Menu>
-          {/* Year Selector */}
-          <Menu
-            visible={yearMenuVisible}
-            onDismiss={() => setYearMenuVisible(false)}
-            anchor={
-              <Button mode="outlined" onPress={() => setYearMenuVisible(true)}>
-                <Text style={{ color: 'black', fontWeight: 'bold' }}>
-                  {year}
-                </Text>
-              </Button>
-            }
-          >
-            {YEARS.map(y => (
-              <Menu.Item
-                key={y}
-                onPress={() => {
-                  setYear(y);
-                  setYearMenuVisible(false);
-                }}
-                title={y.toString()}
-                titleStyle={{ color: 'black', fontWeight: 'bold' }}
-              />
-            ))}
-          </Menu>
-          {/* Room Selector */}
-          <Menu
-            visible={roomMenuVisible}
-            onDismiss={() => setRoomMenuVisible(false)}
-            anchor={
-              <Button mode="outlined" onPress={() => setRoomMenuVisible(true)}>
-                <Text style={{ color: 'black', fontWeight: 'bold' }}>
-                  {selectedRoom || 'Sala'}
-                </Text>
-              </Button>
-            }
-          >
+            </View>
+          )}
+        </Modal>
+      </Portal>
+
+      <View style={styles.hero}>
+        <Text style={styles.eyebrow}>Panel de asignaciones</Text>
+        <Text style={styles.heroTitle}>Control mensual del programa</Text>
+        <Text style={styles.heroSubtitle}>
+          Filtra por fecha y sala, revisa estados rapidamente y actualiza notas en un solo flujo.
+        </Text>
+      </View>
+
+      <View style={styles.filtersCard}>
+        <Menu
+          visible={monthMenuVisible}
+          onDismiss={() => setMonthMenuVisible(false)}
+          contentStyle={styles.dropdownMenu}
+          anchor={
+            <Button
+              mode="outlined"
+              onPress={() => setMonthMenuVisible(true)}
+              style={styles.filterButton}
+              labelStyle={styles.filterButtonLabel}>
+              {monthLabel}
+            </Button>
+          }>
+          {MONTHS.map((m) => (
             <Menu.Item
-              key="all"
+              key={m.value}
               onPress={() => {
+                setMonth(m.value);
+                setSelectedDay(null);
                 setSelectedRoom(null);
+                setMonthMenuVisible(false);
+              }}
+              title={m.label}
+              style={month === m.value ? styles.dropdownItemActive : undefined}
+              titleStyle={[
+                styles.dropdownItemText,
+                month === m.value ? styles.dropdownItemTextActive : undefined,
+              ]}
+            />
+          ))}
+        </Menu>
+
+        <Menu
+          visible={yearMenuVisible}
+          onDismiss={() => setYearMenuVisible(false)}
+          contentStyle={styles.dropdownMenu}
+          anchor={
+            <Button
+              mode="outlined"
+              onPress={() => setYearMenuVisible(true)}
+              style={styles.filterButton}
+              labelStyle={styles.filterButtonLabel}>
+              {String(year)}
+            </Button>
+          }>
+          {YEARS.map((itemYear) => (
+            <Menu.Item
+              key={itemYear}
+              onPress={() => {
+                setYear(itemYear);
+                setYearMenuVisible(false);
+              }}
+              title={itemYear.toString()}
+              style={year === itemYear ? styles.dropdownItemActive : undefined}
+              titleStyle={[
+                styles.dropdownItemText,
+                year === itemYear ? styles.dropdownItemTextActive : undefined,
+              ]}
+            />
+          ))}
+        </Menu>
+
+        <Menu
+          visible={roomMenuVisible}
+          onDismiss={() => setRoomMenuVisible(false)}
+          contentStyle={styles.dropdownMenu}
+          anchor={
+            <Button
+              mode="outlined"
+              onPress={() => setRoomMenuVisible(true)}
+              style={styles.filterButton}
+              labelStyle={styles.filterButtonLabel}>
+              {selectedRoom || 'Sala'}
+            </Button>
+          }>
+          <Menu.Item
+            key="all-rooms"
+            onPress={() => {
+              setSelectedRoom(null);
+              setRoomMenuVisible(false);
+            }}
+            title="Todas las salas"
+            style={!selectedRoom ? styles.dropdownItemActive : undefined}
+            titleStyle={[
+              styles.dropdownItemText,
+              !selectedRoom ? styles.dropdownItemTextActive : undefined,
+            ]}
+          />
+          {roomOptions.map((room) => (
+            <Menu.Item
+              key={room}
+              onPress={() => {
+                setSelectedRoom(room);
                 setRoomMenuVisible(false);
               }}
-              title="Todas las salas"
-              titleStyle={{ color: 'black', fontWeight: 'bold' }}
+              title={room}
+              style={selectedRoom === room ? styles.dropdownItemActive : undefined}
+              titleStyle={[
+                styles.dropdownItemText,
+                selectedRoom === room ? styles.dropdownItemTextActive : undefined,
+              ]}
             />
-            {roomOptions.map(room => (
-              <Menu.Item
-                key={room}
-                onPress={() => {
-                  setSelectedRoom(room);
-                  setRoomMenuVisible(false);
-                }}
-                title={room}
-                titleStyle={{ color: 'black', fontWeight: 'bold' }}
-              />
-            ))}
-          </Menu>
-          {/* Day Selector */}
-          <Menu
-            visible={dayMenuVisible}
-            onDismiss={() => setDayMenuVisible(false)}
-            anchor={
-              <Button mode="outlined" onPress={() => setDayMenuVisible(true)}>
-                <Text style={{ color: 'black', fontWeight: 'bold' }}>
-                  {selectedDay || 'Día'}
-                </Text>
-              </Button>
-            }
-          >
+          ))}
+        </Menu>
+
+        <Menu
+          visible={dayMenuVisible}
+          onDismiss={() => setDayMenuVisible(false)}
+          contentStyle={styles.dropdownMenu}
+          anchor={
+            <Button
+              mode="outlined"
+              onPress={() => setDayMenuVisible(true)}
+              style={styles.filterButton}
+              labelStyle={styles.filterButtonLabel}>
+              {selectedDay || 'Dia'}
+            </Button>
+          }>
+          <Menu.Item
+            key="all-days"
+            onPress={() => {
+              setSelectedDay(null);
+              setDayMenuVisible(false);
+            }}
+            title="Todos los dias"
+            style={!selectedDay ? styles.dropdownItemActive : undefined}
+            titleStyle={[
+              styles.dropdownItemText,
+              !selectedDay ? styles.dropdownItemTextActive : undefined,
+            ]}
+          />
+          {dayOptions.map((day) => (
             <Menu.Item
-              key="all-days"
+              key={day}
               onPress={() => {
-                setSelectedDay(null);
+                setSelectedDay(day);
                 setDayMenuVisible(false);
               }}
-              title="Todos los días"
-              titleStyle={{ color: 'black', fontWeight: 'bold' }}
+              title={day}
+              style={selectedDay === day ? styles.dropdownItemActive : undefined}
+              titleStyle={[
+                styles.dropdownItemText,
+                selectedDay === day ? styles.dropdownItemTextActive : undefined,
+              ]}
             />
-            {dayOptions.map(day => (
-              <Menu.Item
-                key={day}
-                onPress={() => {
-                  setSelectedDay(day);
-                  setDayMenuVisible(false);
-                }}
-                title={day}
-                titleStyle={{ color: 'black', fontWeight: 'bold' }}
-              />
-            ))}
-          </Menu>
-        </View>
-        <Title style={{ textAlign: 'center', marginVertical: 8, fontWeight: 'bold', color:'black' }}>Asignaciones del mes</Title>
-        {loading ? (
-          <ActivityIndicator animating={true} size="large" />
-        ) : (
-          <View>
-            {filteredData.map((item: any) => {
-              let icon = 'alert-circle-outline';
-              let iconColor = '#FFD600'; // yellow for PENDIENTE
-
-              if (item.attended_display === 'ASISTIO') {
-                icon = 'check-circle-outline';
-                iconColor = '#43A047'; // green
-              } else if (item.attended_display === 'NO ASISTIO') {
-                icon = 'close-circle-outline';
-                iconColor = '#E53935'; // red
-              }
-
-              return (
-                <TouchableOpacity key={item.id} onPress={() => showModal(item)} activeOpacity={0.7}>
-                  <List.Item
-                    title={`${item.asignation_date} - ${item.asignation_type.type_name}`}
-                    description={
-                      `${item.person.name}` +
-                      (item.helper ? ` (Ayudante: ${item.helper.name})` : '') +
-                      ` - ${item.room_display} - Estado: ${item.attended_display || 'PENDIENTE'}`
-                    }
-                    left={props => <List.Icon {...props} icon={icon} color={iconColor} />}
-                    style={styles.asignationItem}
-                    titleStyle={{ color: 'black', fontWeight: 'bold' }}
-                    descriptionStyle={{ color: 'black' }}
-                  />
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        )}
+          ))}
+        </Menu>
       </View>
+
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Asignaciones del mes</Text>
+        <Text style={styles.sectionCaption}>{filteredData.length} registros</Text>
+      </View>
+
+      {loading ? (
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator animating size="large" color={palette.primary} />
+        </View>
+      ) : (
+        <View style={styles.listWrap}>
+          {filteredData.map((item) => {
+            let icon = 'alert-circle-outline';
+            let iconColor: string = palette.warning;
+
+            if (item.attended_display === 'ASISTIO') {
+              icon = 'check-circle-outline';
+              iconColor = palette.success;
+            } else if (item.attended_display === 'NO ASISTIO') {
+              icon = 'close-circle-outline';
+              iconColor = palette.danger;
+            }
+
+            return (
+              <TouchableOpacity key={item.id} onPress={() => showModal(item)} activeOpacity={0.88}>
+                <List.Item
+                  title={`${item.asignation_date} - ${item.asignation_type.type_name}`}
+                  description={
+                    `${item.person.name}` +
+                    (item.helper ? ` (Ayudante: ${item.helper.name})` : '') +
+                    ` - ${item.room_display} - Estado: ${item.attended_display || 'PENDIENTE'}`
+                  }
+                  left={(props) => <List.Icon {...props} icon={icon} color={iconColor} />}
+                  right={(props) => <List.Icon {...props} icon="chevron-right" color={palette.icon} />}
+                  style={styles.asignationItem}
+                  titleStyle={styles.itemTitle}
+                  descriptionStyle={styles.itemDescription}
+                />
+              </TouchableOpacity>
+            );
+          })}
+
+          {filteredData.length === 0 && (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyTitle}>Sin resultados para los filtros seleccionados</Text>
+              <Text style={styles.emptyText}>Cambia el dia o la sala para ver otras asignaciones.</Text>
+            </View>
+          )}
+        </View>
+      )}
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  page: {
+    flex: 1,
+    backgroundColor: palette.background,
+  },
+  pageContent: {
+    paddingHorizontal: 16,
+    paddingTop: 18,
+    paddingBottom: 28,
+    gap: 14,
+  },
+  hero: {
+    backgroundColor: '#EAF0FF',
+    borderRadius: 20,
+    paddingVertical: 18,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: '#D5E0FF',
+  },
+  eyebrow: {
+    color: palette.primary,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
+  heroTitle: {
+    color: palette.text,
+    fontSize: 24,
+    fontWeight: '800',
+    marginTop: 6,
+  },
+  heroSubtitle: {
+    color: palette.secondaryText,
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 6,
+  },
+  filtersCard: {
+    backgroundColor: palette.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: palette.border,
+    padding: 10,
     gap: 8,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  filterButton: {
+    borderColor: palette.border,
+    borderRadius: 12,
+    justifyContent: 'center',
+  },
+  filterButtonLabel: {
+    color: palette.text,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  dropdownMenu: {
+    backgroundColor: palette.surface,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: palette.border,
+  },
+  dropdownItemActive: {
+    backgroundColor: '#EAF0FF',
+    borderRadius: 10,
+  },
+  dropdownItemText: {
+    color: palette.text,
+    fontWeight: '600',
+  },
+  dropdownItemTextActive: {
+    color: palette.primary,
+    fontWeight: '800',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    paddingHorizontal: 2,
+    marginTop: 2,
+  },
+  sectionTitle: {
+    color: palette.text,
+    fontSize: 19,
+    fontWeight: '800',
+  },
+  sectionCaption: {
+    color: palette.secondaryText,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  loadingWrap: {
+    paddingVertical: 24,
+  },
+  listWrap: {
+    gap: 10,
   },
   asignationItem: {
-    marginBottom: 8,
+    backgroundColor: palette.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: palette.border,
+    paddingVertical: 4,
+  },
+  itemTitle: {
+    color: palette.text,
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  itemDescription: {
+    color: palette.secondaryText,
+    marginTop: 2,
+    lineHeight: 19,
+  },
+  modalContainer: {
+    backgroundColor: palette.surface,
+    marginHorizontal: 16,
+    borderRadius: 18,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: palette.border,
+  },
+  modalTitle: {
+    textAlign: 'center',
+    marginBottom: 10,
+    color: palette.text,
+    fontWeight: '800',
+  },
+  modalText: {
+    color: palette.secondaryText,
+    marginBottom: 2,
+  },
+  modalStrong: {
+    color: palette.text,
+    fontWeight: '700',
+  },
+  fieldLabel: {
+    marginTop: 12,
+    marginBottom: 6,
+    color: palette.text,
+    fontWeight: '700',
+  },
+  fieldButton: {
+    borderColor: palette.border,
+    borderRadius: 12,
+  },
+  fieldButtonLabel: {
+    color: palette.text,
+    fontWeight: '700',
+  },
+  notesInput: {
+    backgroundColor: palette.surface,
+    marginBottom: 4,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 16,
+    gap: 10,
+  },
+  actionButton: {
+    flex: 1,
+  },
+  emptyCard: {
+    backgroundColor: palette.surface,
+    borderColor: palette.border,
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 16,
+  },
+  emptyTitle: {
+    color: palette.text,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  emptyText: {
+    color: palette.secondaryText,
+    marginTop: 4,
+    lineHeight: 20,
   },
 });
