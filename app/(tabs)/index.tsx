@@ -165,6 +165,9 @@ export default function HomeScreen() {
 
   return (
     <ScrollView style={styles.page} contentContainerStyle={styles.pageContent}>
+      <View style={styles.bgBlobTop} />
+      <View style={styles.bgBlobBottom} />
+
       <Portal>
         <Modal visible={visible} onDismiss={hideModal} contentContainerStyle={styles.modalContainer}>
           {selectedItem && (
@@ -457,7 +460,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   page: {
     flex: 1,
-    backgroundColor: palette.background,
+    backgroundColor: '#EEF3FF',
   },
   pageContent: {
     paddingHorizontal: 16,
@@ -465,13 +468,36 @@ const styles = StyleSheet.create({
     paddingBottom: 28,
     gap: 14,
   },
+  bgBlobTop: {
+    position: 'absolute',
+    top: -80,
+    right: -50,
+    width: 220,
+    height: 220,
+    borderRadius: 120,
+    backgroundColor: '#DCE8FF',
+  },
+  bgBlobBottom: {
+    position: 'absolute',
+    bottom: 90,
+    left: -70,
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: '#E6F7F3',
+  },
   hero: {
-    backgroundColor: '#EAF0FF',
-    borderRadius: 20,
-    paddingVertical: 18,
-    paddingHorizontal: 16,
+    backgroundColor: '#F8FBFF',
+    borderRadius: 28,
+    paddingVertical: 20,
+    paddingHorizontal: 18,
     borderWidth: 1,
-    borderColor: '#D5E0FF',
+    borderColor: '#DDE7FB',
+    shadowColor: '#163B8A',
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 3,
   },
   eyebrow: {
     color: palette.primary,
@@ -482,7 +508,7 @@ const styles = StyleSheet.create({
   },
   heroTitle: {
     color: palette.text,
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: '800',
     marginTop: 6,
   },
@@ -493,17 +519,23 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   filtersCard: {
-    backgroundColor: palette.surface,
-    borderRadius: 16,
+    backgroundColor: '#FAFCFF',
+    borderRadius: 24,
     borderWidth: 1,
-    borderColor: palette.border,
-    padding: 10,
+    borderColor: '#DFE8F8',
+    padding: 12,
     gap: 8,
+    shadowColor: '#163B8A',
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 2,
   },
   filterButton: {
-    borderColor: palette.border,
-    borderRadius: 12,
+    borderColor: '#D6E0F6',
+    borderRadius: 999,
     justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
   },
   filterButtonLabel: {
     color: palette.text,
@@ -511,14 +543,18 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   dropdownMenu: {
-    backgroundColor: palette.surface,
-    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: palette.border,
+    borderColor: '#D9E4F8',
+    shadowColor: '#163B8A',
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
   },
   dropdownItemActive: {
-    backgroundColor: '#EAF0FF',
-    borderRadius: 10,
+    backgroundColor: '#E8F0FF',
+    borderRadius: 14,
   },
   dropdownItemText: {
     color: palette.text,
@@ -552,11 +588,16 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   asignationItem: {
-    backgroundColor: palette.surface,
-    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
     borderWidth: 1,
-    borderColor: palette.border,
+    borderColor: '#DFE8F8',
     paddingVertical: 4,
+    shadowColor: '#163B8A',
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 2,
   },
   itemTitle: {
     color: palette.text,
@@ -569,12 +610,16 @@ const styles = StyleSheet.create({
     lineHeight: 19,
   },
   modalContainer: {
-    backgroundColor: palette.surface,
+    backgroundColor: '#FFFFFF',
     marginHorizontal: 16,
-    borderRadius: 18,
-    padding: 18,
+    borderRadius: 26,
+    padding: 20,
     borderWidth: 1,
-    borderColor: palette.border,
+    borderColor: '#DCE6FA',
+    shadowColor: '#163B8A',
+    shadowOpacity: 0.1,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
   },
   modalTitle: {
     textAlign: 'center',
@@ -597,15 +642,16 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   fieldButton: {
-    borderColor: palette.border,
-    borderRadius: 12,
+    borderColor: '#D6E0F6',
+    borderRadius: 14,
+    backgroundColor: '#F7FAFF',
   },
   fieldButtonLabel: {
     color: palette.text,
     fontWeight: '700',
   },
   notesInput: {
-    backgroundColor: palette.surface,
+    backgroundColor: '#F7FAFF',
     marginBottom: 4,
   },
   modalActions: {
@@ -618,10 +664,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   emptyCard: {
-    backgroundColor: palette.surface,
-    borderColor: palette.border,
+    backgroundColor: '#FFFFFF',
+    borderColor: '#DFE8F8',
     borderWidth: 1,
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 16,
   },
   emptyTitle: {

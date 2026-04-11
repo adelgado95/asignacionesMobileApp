@@ -24,27 +24,40 @@ export default function TabLayout() {
           ios: {
             position: 'absolute',
             borderTopWidth: 0,
+            left: 16,
+            right: 16,
+            bottom: 14,
+            height: 72,
+            borderRadius: 24,
+            backgroundColor: '#FFFFFFF2',
+            shadowColor: '#0F172A',
+            shadowOpacity: 0.12,
+            shadowRadius: 14,
+            shadowOffset: { width: 0, height: 8 },
           },
           default: {
-            height: 66,
+            height: 72,
             paddingBottom: 8,
-            backgroundColor: Colors.light.surface,
-            borderTopColor: Colors.light.border,
-            borderTopWidth: 1,
+            borderTopWidth: 0,
+            marginHorizontal: 16,
+            marginBottom: 12,
+            borderRadius: 24,
+            backgroundColor: '#FFFFFF',
+            elevation: 8,
           },
         }),
       }}>
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
+          title: 'Inicio',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
         }}
       />
       <Tabs.Screen
         name="explore"
         options={{
-          title: 'Explore',
+          title: 'Resumen',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
         }}
       />

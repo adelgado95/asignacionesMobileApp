@@ -23,6 +23,9 @@ const quickFacts = [
 export default function ExploreScreen() {
   return (
     <View style={styles.page}>
+      <View style={styles.bgBlobTop} />
+      <View style={styles.bgBlobBottom} />
+
       <View style={styles.heroCard}>
         <Text style={styles.heroEyebrow}>Asistencias</Text>
         <Text style={styles.heroTitle}>Resumen operativo</Text>
@@ -59,22 +62,45 @@ export default function ExploreScreen() {
 const styles = StyleSheet.create({
   page: {
     flex: 1,
-    backgroundColor: palette.background,
+    backgroundColor: '#EEF3FF',
     paddingHorizontal: 16,
     paddingTop: 18,
     paddingBottom: 28,
     gap: 14,
   },
+  bgBlobTop: {
+    position: 'absolute',
+    top: -70,
+    right: -60,
+    width: 210,
+    height: 210,
+    borderRadius: 105,
+    backgroundColor: '#DCE8FF',
+  },
+  bgBlobBottom: {
+    position: 'absolute',
+    bottom: 80,
+    left: -65,
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: '#E6F7F3',
+  },
   heroCard: {
-    backgroundColor: '#DBF4F0',
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 18,
+    backgroundColor: '#F8FBFF',
+    borderRadius: 28,
+    paddingHorizontal: 18,
+    paddingVertical: 20,
     borderWidth: 1,
-    borderColor: '#BDE6DF',
+    borderColor: '#DFE8F8',
+    shadowColor: '#163B8A',
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 3,
   },
   heroEyebrow: {
-    color: '#167A70',
+    color: palette.primary,
     fontSize: 12,
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -83,7 +109,7 @@ const styles = StyleSheet.create({
   heroTitle: {
     color: palette.text,
     fontWeight: '800',
-    fontSize: 24,
+    fontSize: 26,
     marginTop: 6,
   },
   heroSubtitle: {
@@ -92,12 +118,17 @@ const styles = StyleSheet.create({
     lineHeight: 21,
   },
   block: {
-    backgroundColor: palette.surface,
-    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
     borderWidth: 1,
-    borderColor: palette.border,
+    borderColor: '#DFE8F8',
     padding: 14,
     gap: 10,
+    shadowColor: '#163B8A',
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 2,
   },
   blockTitle: {
     color: palette.text,
