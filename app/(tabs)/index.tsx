@@ -429,11 +429,12 @@ export default function HomeScreen() {
             return (
               <TouchableOpacity key={item.id} onPress={() => showModal(item)} activeOpacity={0.88}>
                 <List.Item
-                  title={`${item.asignation_date} - ${item.asignation_type.type_name}`}
+                  title={`${item.asignation_type.type_name}`}
                   description={
                     `${item.person.name}` +
                     (item.helper ? ` (Ayudante: ${item.helper.name})` : '') +
-                    ` - ${item.room_display} - Estado: ${item.attended_display || 'PENDIENTE'}`
+                    ` - ${item.room_display} - Estado: ${item.attended_display || 'PENDIENTE'}` +
+                    ` - ${item.asignation_date}`
                   }
                   left={(props) => <List.Icon {...props} icon={icon} color={iconColor} />}
                   right={(props) => <List.Icon {...props} icon="chevron-right" color={palette.icon} />}
