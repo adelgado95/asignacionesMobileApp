@@ -2,14 +2,14 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Button, Text } from 'react-native-paper';
 
-import { ScreenHeader } from '@/components/ScreenHeader';
+import { WeekHeader } from '@/components/WeekHeader';
 import { useHideTabBarOnScroll } from '@/lib/tabBarVisibility';
-import { Select } from '@/components/Select';
 import { Colors } from '@/constants/Colors';
 import { API_URL } from '@/constants/api';
 import { useAuth } from '@/lib/auth';
 import { TimerActions, TimerControl, elapsedOf, useStopwatches } from '@/components/Stopwatch';
-import { MONTHS, YEARS, longDate } from '@/lib/dates';
+import { longDate } from '@/lib/dates';
+import { formatWeekRange, getWeekStart, monthOfWeek, toISODate } from '@/lib/weeks';
 
 const palette = Colors.light;
 
@@ -20,7 +20,7 @@ const SECTION = {
   acomodadores: '#3D5A6C',
 } as const;
 
-const CONGREGATION = 'AVENIDA CENTRAL LEÓN';
+const CONGREGATION = 'Avenida Central León';
 const SERIF = Platform.select({ ios: 'Georgia', android: 'serif', default: 'Georgia, serif' });
 
 // ---------- API shape (GET /api/vymc/) ----------
@@ -164,8 +164,6 @@ function toProgram(w: ApiWeek): Program {
   };
 }
 
-const today = new Date();
-const TODAY_ISO = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
 // ---------- Components ----------
 
@@ -220,14 +218,14 @@ function RowView({
 }
 
 export default function VyMCScreen() {
-  const { authFetch } = useAuth();
+  const { authFetch, signOut } = useAuth();
   const scrollProps = useHideTabBarOnScroll();
   const [weeks, setWeeks] = useState<ApiWeek[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const [month, setMonth] = useState(today.getMonth() + 1);
-  const [year, setYear] = useState(today.getFullYear());
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  // Monday of the selected week; the month and year loaded from the API come from it.
+  const [weekStart, setWeekStart] = useState(() => getWeekStart(new Date()));
+  const { month, year } = monthOfWeek(weekStart);
   const sw = useStopwatches();
 
   const load = async () => {
@@ -249,14 +247,6 @@ export default function VyMCScreen() {
   useEffect(() => {
     load();
   }, [month, year]);
-
-  // Default to the current week (or the next one, or the last of the month).
-  useEffect(() => {
-    if (weeks.length === 0) setSelectedId(null);
-    else if (selectedId === null || !weeks.some((w) => w.id === selectedId)) {
-      setSelectedId((weeks.find((w) => w.fecha_fin >= TODAY_ISO) ?? weeks[weeks.length - 1]).id);
-    }
-  }, [weeks]);
 
   const keyOf = (t: RowTimer) => `${t.weekId}:${t.numero}`;
 
@@ -361,57 +351,16 @@ export default function VyMCScreen() {
 
   useEffect(() => () => Object.values(pending.current).forEach(clearTimeout), []);
 
-  const selected = weeks.find((w) => w.id === selectedId) ?? null;
+  // The program of the selected week, if the backend has one.
+  const weekIso = toISODate(weekStart);
+  const selected = weeks.find((w) => w.fecha_inicio === weekIso) ?? null;
   const program = useMemo(() => (selected ? toProgram(selected) : null), [selected]);
 
   return (
     <ScrollView style={styles.page} contentContainerStyle={styles.content} {...scrollProps}>
-      <ScreenHeader title="Vida y Ministerio" />
+      <WeekHeader value={weekStart} onChange={setWeekStart} onLogout={signOut} congregation={CONGREGATION} />
 
-      <View style={styles.form}>
-        <View style={styles.formRow}>
-          <Select
-            style={styles.monthField}
-            label="Mes"
-            value={MONTHS[month - 1].label}
-            options={MONTHS.map((m) => ({
-              key: String(m.value),
-              label: m.label,
-              selected: month === m.value,
-              onSelect: () => {
-                setSelectedId(null);
-                setMonth(m.value);
-              },
-            }))}
-          />
-          <Select
-            style={styles.yearField}
-            label="Año"
-            value={String(year)}
-            options={YEARS.map((y) => ({
-              key: String(y),
-              label: String(y),
-              selected: year === y,
-              onSelect: () => {
-                setSelectedId(null);
-                setYear(y);
-              },
-            }))}
-          />
-        </View>
-        <Select
-          label="Semana"
-          value={selected ? selected.semana : 'Sin semanas'}
-          disabled={weeks.length === 0}
-          options={weeks.map((w) => ({
-            key: String(w.id),
-            label: w.semana,
-            selected: selectedId === w.id,
-            onSelect: () => setSelectedId(w.id),
-          }))}
-        />
-      </View>
-
+      <View style={styles.body}>
       {loading ? (
         <View style={styles.centered}>
           <ActivityIndicator animating size="large" color={palette.primary} />
@@ -428,14 +377,11 @@ export default function VyMCScreen() {
         </View>
       ) : !program ? (
         <View style={styles.centered}>
-          <Text style={styles.emptyTitle}>
-            Sin programa en {MONTHS[month - 1].label.toLowerCase()} de {year}
-          </Text>
+          <Text style={styles.emptyTitle}>Sin programa del {formatWeekRange(weekStart)}</Text>
           <Text style={styles.emptyText}>Las semanas se agregan desde el administrador de Django.</Text>
         </View>
       ) : (
         <View style={styles.sheet}>
-          <Text style={styles.congregation}>{CONGREGATION}</Text>
           <Text style={styles.programTitle}>Programa para la reunión de entre semana</Text>
           <View style={styles.weekBlock}>
             <Text style={styles.week}>{program.week.toUpperCase()}</Text>
@@ -482,6 +428,7 @@ export default function VyMCScreen() {
           )}
         </View>
       )}
+      </View>
     </ScrollView>
   );
 }
@@ -492,15 +439,9 @@ const GRAY = '#7B7D7F';
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: palette.surface },
   content: {
-    paddingHorizontal: 16,
-    paddingTop: 52,
     paddingBottom: 120, // clear the floating tab bar
-    gap: 18,
   },
-  form: { gap: 14 },
-  formRow: { flexDirection: 'row', gap: 12 },
-  monthField: { flex: 2 },
-  yearField: { flex: 1 },
+  body: { paddingHorizontal: 20, gap: 18 },
   centered: { paddingVertical: 40, gap: 6 },
   emptyTitle: { color: INK, fontSize: 18, fontWeight: '700' },
   emptyText: { color: palette.secondaryText, fontSize: 15, lineHeight: 21 },
@@ -510,7 +451,6 @@ const styles = StyleSheet.create({
 
   // The program sheet: one column, every row full width.
   sheet: { gap: 14 },
-  congregation: { color: INK, fontSize: 13, fontWeight: '800' },
   programTitle: {
     color: INK,
     fontFamily: SERIF,

@@ -22,6 +22,12 @@
       "android": {
         "buildType": "apk"
       }
+    },
+    "apk": {
+      "extends": "preview",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://central.admincong.online"
+      }
     }
   },
   "submit": {

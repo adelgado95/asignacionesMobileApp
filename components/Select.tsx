@@ -17,19 +17,21 @@ export function Select({
   value,
   options,
   disabled,
+  compact,
   style,
 }: {
   label: string;
   value: string;
   options: SelectOption[];
   disabled?: boolean;
+  compact?: boolean; // 44 px field and 12 px label, for dense headers
   style?: object;
 }) {
   const [visible, setVisible] = useState(false);
   const [width, setWidth] = useState(0);
   return (
     <View style={style} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
-      <Text style={styles.selectLabel}>{label}</Text>
+      <Text style={[styles.selectLabel, compact && styles.selectLabelCompact]}>{label}</Text>
       <Menu
         visible={visible}
         onDismiss={() => setVisible(false)}
@@ -41,7 +43,7 @@ export function Select({
             disabled={disabled}
             accessibilityRole="combobox"
             accessibilityLabel={`${label}: ${value}`}
-            style={[styles.select, visible && styles.selectOpen, disabled && styles.selectDisabled]}>
+            style={[styles.select, compact && styles.selectCompact, visible && styles.selectOpen, disabled && styles.selectDisabled]}>
             <Text style={styles.selectValue} numberOfLines={1}>
               {value}
             </Text>
@@ -72,6 +74,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 6,
   },
+  selectLabelCompact: { fontSize: 12, fontWeight: '400', marginBottom: 4 },
+  selectCompact: { minHeight: 44 },
   select: {
     minHeight: 48,
     flexDirection: 'row',

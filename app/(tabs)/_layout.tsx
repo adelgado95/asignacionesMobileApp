@@ -54,6 +54,13 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <Ionicons name="school-outline" size={28} color={color} />,
         }}
       />
+      <Tabs.Screen
+        name="mis-partes"
+        options={{
+          title: 'Mis partes',
+          tabBarIcon: ({ color }) => <Ionicons name="person-outline" size={28} color={color} />,
+        }}
+      />
       <Tabs.Screen name="explore" options={{ href: null }} />
     </Tabs>
     </TabBarVisibilityProvider>
