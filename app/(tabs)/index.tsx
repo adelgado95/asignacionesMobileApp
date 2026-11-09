@@ -1,98 +1,232 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import {
-    ActivityIndicator,
-    Button,
-    List,
-    Menu,
-    Modal,
-    Portal,
-    Text,
-    TextInput,
-    Title,
+  ActivityIndicator,
+  Button,
+  Menu,
+  Modal,
+  Portal,
+  SegmentedButtons,
+  Text,
+  TextInput,
 } from 'react-native-paper';
 
 import { Colors } from '@/constants/Colors';
-
-type AttendedValue = 'pendiente' | 'Asistio' | 'no asistio';
-
-type AsignationType = {
-  type_name: string;
-};
-
-type PersonType = {
-  name: string;
-};
-
-type Asignation = {
-  id: number;
-  asignation_date: string;
-  asignation_type: AsignationType;
-  person: PersonType;
-  helper?: PersonType | null;
-  room_display: string;
-  attended_display?: string;
-  asignation_number_display: string;
-  notes?: string;
-  attended?: AttendedValue;
-};
-
-const MONTHS = [
-  { label: 'Enero', value: 1 },
-  { label: 'Febrero', value: 2 },
-  { label: 'Marzo', value: 3 },
-  { label: 'Abril', value: 4 },
-  { label: 'Mayo', value: 5 },
-  { label: 'Junio', value: 6 },
-  { label: 'Julio', value: 7 },
-  { label: 'Agosto', value: 8 },
-  { label: 'Septiembre', value: 9 },
-  { label: 'Octubre', value: 10 },
-  { label: 'Noviembre', value: 11 },
-  { label: 'Diciembre', value: 12 },
-];
-
-const YEARS = [2024, 2025, 2026];
-
-const ATTENDED_CHOICES: { value: AttendedValue; label: string }[] = [
-  { value: 'pendiente', label: 'PENDIENTE' },
-  { value: 'Asistio', label: 'ASISTIO' },
-  { value: 'no asistio', label: 'NO ASISTIO' },
-];
+import { API_URL } from '@/constants/api';
+import { Select } from '@/components/Select';
+import { useAuth } from '@/lib/auth';
+import { MONTHS, YEARS, longDate, parseDay } from '@/lib/dates';
+import type { Asignation, AttendedValue } from '@/lib/types';
 
 const today = new Date();
 const CURRENT_MONTH = today.getMonth() + 1;
 const CURRENT_YEAR = today.getFullYear();
 
 const palette = Colors.light;
+const INK = palette.text;
+const MUTED = palette.secondaryText;
+const HAIRLINE = palette.border;
+
+// Status text colors are darker than the base palette so they stay readable on white.
+const STATUS = {
+  success: { color: '#17754A', label: 'Asistió' },
+  danger: { color: '#B83232', label: 'No asistió' },
+  warning: { color: '#8F5B00', label: 'Pendiente' },
+} as const;
+
+const statusOf = (display?: string | null) => {
+  if (display === 'ASISTIO') return STATUS.success;
+  if (display === 'NO ASISTIO') return STATUS.danger;
+  return STATUS.warning;
+};
+
+type TimerState = { accumulated: number; startedAt: number | null };
+
+const elapsedOf = (t: TimerState | undefined, now: number) =>
+  t ? t.accumulated + (t.startedAt ? Math.max(0, now - t.startedAt) : 0) : 0;
+
+const formatElapsed = (ms: number) => {
+  const total = Math.floor(ms / 1000);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const sec = String(total % 60).padStart(2, '0');
+  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
+};
+
+type SyncState = 'saving' | 'error' | undefined;
+
+// Time display and start/pause for one assignment.
+const TimerControl = React.memo(function TimerControl({
+  elapsed,
+  running,
+  onToggle,
+}: {
+  elapsed: number;
+  running: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <View style={styles.timer}>
+      <Text style={[styles.timerText, running && styles.timerTextRunning]}>{formatElapsed(elapsed)}</Text>
+      <Pressable
+        onPress={onToggle}
+        accessibilityRole="button"
+        accessibilityLabel={running ? 'Pausar cronómetro' : elapsed > 0 ? 'Reanudar cronómetro' : 'Iniciar cronómetro'}
+        style={[styles.timerButton, running && styles.timerButtonRunning]}>
+        <Ionicons
+          name={running ? 'pause' : 'play'}
+          size={20}
+          color={running ? '#FFFFFF' : palette.primary}
+          style={running ? undefined : styles.playIcon}
+        />
+      </Pressable>
+    </View>
+  );
+});
+
+// Save-to-backend and reset actions, shown only once an assignment has a stopwatch.
+function TimerActions({
+  elapsed,
+  saved,
+  running,
+  sync,
+  onSync,
+  onReset,
+}: {
+  elapsed: number;
+  saved: number; // seconds already stored in the backend
+  running: boolean;
+  sync: SyncState;
+  onSync: () => void;
+  onReset: () => void;
+}) {
+  const seconds = Math.round(elapsed / 1000);
+  const dirty = seconds !== saved;
+  const canReset = !running && elapsed > 0;
+
+  return (
+    <View style={styles.timerActions}>
+      {sync === 'saving' ? (
+        <View style={styles.actionLink}>
+          <ActivityIndicator size={14} color={palette.primary} />
+          <Text style={styles.actionMuted}>Guardando…</Text>
+        </View>
+      ) : dirty ? (
+        <Pressable
+          onPress={onSync}
+          accessibilityRole="button"
+          accessibilityLabel={`Guardar tiempo ${formatElapsed(elapsed)}`}
+          style={styles.actionLink}>
+          <Ionicons name={sync === 'error' ? 'alert-circle' : 'cloud-upload-outline'} size={18} color={sync === 'error' ? STATUS.danger.color : palette.primary} />
+          <Text style={[styles.actionText, sync === 'error' && { color: STATUS.danger.color }]}>
+            {sync === 'error' ? 'No se pudo guardar. Reintentar' : 'Guardar tiempo'}
+          </Text>
+        </Pressable>
+      ) : (
+        <View style={styles.actionLink}>
+          <Ionicons name="checkmark-circle" size={18} color={STATUS.success.color} />
+          <Text style={[styles.actionMuted, { color: STATUS.success.color }]}>Tiempo guardado</Text>
+        </View>
+      )}
+      {canReset && sync !== 'saving' && (
+        <Pressable onPress={onReset} accessibilityRole="button" accessibilityLabel="Reiniciar cronómetro" style={styles.actionLink}>
+          <Ionicons name="refresh" size={18} color={MUTED} />
+          <Text style={styles.actionMuted}>Reiniciar</Text>
+        </Pressable>
+      )}
+    </View>
+  );
+}
 
 export default function HomeScreen() {
+  const { authFetch, signOut } = useAuth();
+
   const [data, setData] = useState<Asignation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [visible, setVisible] = useState(false);
 
   const [month, setMonth] = useState(CURRENT_MONTH);
   const [year, setYear] = useState(CURRENT_YEAR);
-
-  const [roomMenuVisible, setRoomMenuVisible] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState<string | null>(null);
-
-  const [dayMenuVisible, setDayMenuVisible] = useState(false);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
-
-  const [monthMenuVisible, setMonthMenuVisible] = useState(false);
-  const [yearMenuVisible, setYearMenuVisible] = useState(false);
 
   const [selectedItem, setSelectedItem] = useState<Asignation | null>(null);
   const [editNotes, setEditNotes] = useState('');
   const [editAttended, setEditAttended] = useState<AttendedValue>('pendiente');
-  const [attendedMenuVisible, setAttendedMenuVisible] = useState(false);
+  const [editMinutes, setEditMinutes] = useState('0');
+  const [editSeconds, setEditSeconds] = useState('00');
+  const [timeEdited, setTimeEdited] = useState(false);
+
+  // Independent stopwatches keyed by assignment id; they keep running across month/filter changes.
+  // An assignment without a local stopwatch shows (and continues from) its saved `tiempo`.
+  const [timers, setTimers] = useState<Record<number, TimerState>>({});
+  const [syncing, setSyncing] = useState<Record<number, SyncState>>({});
+  const [now, setNow] = useState(() => Date.now());
+  const anyRunning = useMemo(() => Object.values(timers).some((t) => t.startedAt !== null), [timers]);
+
+  useEffect(() => {
+    if (!anyRunning) return;
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [anyRunning]);
+
+  const timerFor = (item: Asignation): TimerState =>
+    timers[item.id] ?? { accumulated: (item.tiempo ?? 0) * 1000, startedAt: null };
+
+  const toggleTimer = (item: Asignation) =>
+    setTimers((prev) => {
+      const t = prev[item.id] ?? { accumulated: (item.tiempo ?? 0) * 1000, startedAt: null };
+      const at = Date.now();
+      return {
+        ...prev,
+        [item.id]: t.startedAt
+          ? { accumulated: t.accumulated + (at - t.startedAt), startedAt: null }
+          : { accumulated: t.accumulated, startedAt: at },
+      };
+    });
+
+  const resetTimer = (id: number) =>
+    setTimers((prev) => ({ ...prev, [id]: { accumulated: 0, startedAt: null } }));
+
+  // Pauses the stopwatch and saves its time plus the assignment's current status and notes.
+  const syncTimer = async (item: Asignation) => {
+    const at = Date.now();
+    const total = elapsedOf(timerFor(item), at);
+    setTimers((prev) => ({ ...prev, [item.id]: { accumulated: total, startedAt: null } }));
+    setNow(at);
+    setSyncing((prev) => ({ ...prev, [item.id]: 'saving' }));
+
+    try {
+      const res = await authFetch(`/api/asignations-edit/${item.id}/`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tiempo: Math.round(total / 1000),
+          attended: item.attended ?? 'pendiente',
+          notes: item.notes ?? '',
+        }),
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      const saved = (await res.json()) as Asignation;
+      setData((prev) => prev.map((a) => (a.id === item.id ? { ...a, ...saved } : a)));
+      setSyncing((prev) => ({ ...prev, [item.id]: undefined }));
+    } catch {
+      setSyncing((prev) => ({ ...prev, [item.id]: 'error' }));
+    }
+  };
 
   const showModal = (item?: Asignation) => {
     if (item) {
       setSelectedItem(item);
       setEditNotes(item.notes || '');
       setEditAttended(item.attended || 'pendiente');
+      const total = Math.floor(elapsedOf(timerFor(item), Date.now()) / 1000);
+      setEditMinutes(String(Math.floor(total / 60)));
+      setEditSeconds(String(total % 60).padStart(2, '0'));
+      setTimeEdited(false);
     }
     setVisible(true);
   };
@@ -104,15 +238,16 @@ export default function HomeScreen() {
 
   const loadData = async () => {
     setLoading(true);
+    setError(false);
 
     try {
-      const res = await fetch(
-        `https://central.admincong.online/api/asignations-by-month/?format=json&month=${month}&year=${year}`
-      );
+      const res = await authFetch(`/api/asignations-by-month/?format=json&month=${month}&year=${year}`);
+      if (!res.ok) throw new Error(String(res.status));
       const json = await res.json();
       setData(Array.isArray(json) ? json : []);
     } catch {
       setData([]);
+      setError(true);
     } finally {
       setLoading(false);
     }
@@ -125,8 +260,13 @@ export default function HomeScreen() {
   const handlePatch = async () => {
     if (!selectedItem) return;
 
+    // Only send the time if it was edited, so a running stopwatch isn't overwritten by a stale value.
+    const tiempo = timeEdited
+      ? Math.min(Number(editMinutes) || 0, 999) * 60 + Math.min(Number(editSeconds) || 0, 59)
+      : undefined;
+
     try {
-      await fetch(`https://central.admincong.online/api/asignations-edit/${selectedItem.id}/`, {
+      await authFetch(`/api/asignations-edit/${selectedItem.id}/`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -134,8 +274,16 @@ export default function HomeScreen() {
         body: JSON.stringify({
           notes: editNotes,
           attended: editAttended,
+          ...(tiempo !== undefined && { tiempo }),
         }),
       });
+      if (tiempo !== undefined) {
+        const id = selectedItem.id;
+        setTimers((prev) => ({
+          ...prev,
+          [id]: { accumulated: tiempo * 1000, startedAt: prev[id]?.startedAt ? Date.now() : null },
+        }));
+      }
       hideModal();
       loadData();
     } catch {
@@ -149,311 +297,287 @@ export default function HomeScreen() {
   );
 
   const dayOptions = useMemo(
-    () => Array.from(new Set(data.map((item) => item.asignation_date))),
+    () => Array.from(new Set(data.map((item) => item.asignation_date))).sort(),
     [data]
   );
 
-  const filteredData = useMemo(() => {
-    return data.filter((item) => {
+  // Filtered assignments grouped by meeting day, in program order.
+  const groups = useMemo(() => {
+    const filtered = data.filter((item) => {
       const roomMatches = selectedRoom ? item.room_display === selectedRoom : true;
       const dayMatches = selectedDay ? item.asignation_date === selectedDay : true;
       return roomMatches && dayMatches;
     });
+    const byDay = new Map<string, Asignation[]>();
+    filtered.forEach((item) => {
+      byDay.set(item.asignation_date, [...(byDay.get(item.asignation_date) ?? []), item]);
+    });
+    return Array.from(byDay.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, items]) => ({
+        date,
+        items: items.sort(
+          (a, b) =>
+            (a.asignation_number ?? 0) - (b.asignation_number ?? 0) ||
+            a.room_display.localeCompare(b.room_display)
+        ),
+      }));
   }, [data, selectedDay, selectedRoom]);
 
   const monthLabel = MONTHS.find((m) => m.value === month)?.label || 'Mes';
+  const hasFilters = !!(selectedRoom || selectedDay);
 
   return (
     <ScrollView style={styles.page} contentContainerStyle={styles.pageContent}>
-      <View style={styles.bgBlobTop} />
-      <View style={styles.bgBlobBottom} />
-
       <Portal>
-        <Modal visible={visible} onDismiss={hideModal} contentContainerStyle={styles.modalContainer}>
+        <Modal
+          visible={visible}
+          onDismiss={hideModal}
+          style={styles.sheetWrapper}
+          contentContainerStyle={styles.sheet}>
           {selectedItem && (
-            <View>
-              <Title style={styles.modalTitle}>Detalle de Asignacion</Title>
-
-              <Text style={styles.modalText}>
-                Fecha: <Text style={styles.modalStrong}>{selectedItem.asignation_date}</Text>
-              </Text>
-              <Text style={styles.modalText}>
-                Tipo: <Text style={styles.modalStrong}>{selectedItem.asignation_type.type_name}</Text>
-              </Text>
-              <Text style={styles.modalText}>
-                Persona: <Text style={styles.modalStrong}>{selectedItem.person.name}</Text>
-              </Text>
-              <Text style={styles.modalText}>
-                Ayudante:{' '}
-                <Text style={styles.modalStrong}>
-                  {selectedItem.helper ? selectedItem.helper.name : 'Sin ayudante'}
-                </Text>
-              </Text>
-              <Text style={styles.modalText}>
-                Sala: <Text style={styles.modalStrong}>{selectedItem.room_display}</Text>
-              </Text>
-              <Text style={styles.modalText}>
-                Numero: <Text style={styles.modalStrong}>{selectedItem.asignation_number_display}</Text>
+            <ScrollView style={styles.sheetScroll} keyboardShouldPersistTaps="handled">
+              <Text style={styles.sheetTitle}>{selectedItem.asignation_type.type_name}</Text>
+              <Text style={styles.sheetSubtitle}>
+                {longDate(selectedItem.asignation_date)}, {selectedItem.room_display}
               </Text>
 
-              <Text style={styles.fieldLabel}>Estado</Text>
-              <Menu
-                visible={attendedMenuVisible}
-                onDismiss={() => setAttendedMenuVisible(false)}
-                anchor={
-                  <Button
-                    mode="outlined"
-                    onPress={() => setAttendedMenuVisible(true)}
-                    style={styles.fieldButton}
-                    labelStyle={styles.fieldButtonLabel}>
-                    {ATTENDED_CHOICES.find((a) => a.value === editAttended)?.label || 'Estado'}
-                  </Button>
-                }>
-                {ATTENDED_CHOICES.map((option) => (
-                  <Menu.Item
-                    key={option.value}
-                    onPress={() => {
-                      setEditAttended(option.value);
-                      setAttendedMenuVisible(false);
-                    }}
-                    title={option.label}
-                  />
-                ))}
-              </Menu>
+              <View style={styles.detailBlock}>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Persona</Text>
+                  <Text style={styles.detailValue}>{selectedItem.person.name}</Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Ayudante</Text>
+                  <Text style={styles.detailValue}>
+                    {selectedItem.helper ? selectedItem.helper.name : 'Sin ayudante'}
+                  </Text>
+                </View>
+              </View>
+
+              <Text style={styles.fieldLabel}>Asistencia</Text>
+              <SegmentedButtons
+                value={editAttended}
+                onValueChange={(v) => setEditAttended(v as AttendedValue)}
+                density="small"
+                buttons={[
+                  { value: 'pendiente', label: 'Pendiente' },
+                  { value: 'Asistio', label: 'Asistió' },
+                  { value: 'no asistio', label: 'No asistió' },
+                ]}
+              />
+
+              <Text style={styles.fieldLabel}>Tiempo</Text>
+              <View style={styles.timeRow}>
+                <TextInput
+                  value={editMinutes}
+                  onChangeText={(v) => {
+                    setEditMinutes(v.replace(/\D/g, '').slice(0, 3));
+                    setTimeEdited(true);
+                  }}
+                  keyboardType="number-pad"
+                  mode="outlined"
+                  selectTextOnFocus
+                  accessibilityLabel="Minutos"
+                  right={<TextInput.Affix text="min" />}
+                  style={styles.timeInput}
+                  outlineStyle={styles.timeOutline}
+                  outlineColor="#C9D2E3"
+                  activeOutlineColor={palette.primary}
+                />
+                <TextInput
+                  value={editSeconds}
+                  onChangeText={(v) => {
+                    setEditSeconds(v.replace(/\D/g, '').slice(0, 2));
+                    setTimeEdited(true);
+                  }}
+                  onBlur={() => setEditSeconds(String(Math.min(Number(editSeconds) || 0, 59)).padStart(2, '0'))}
+                  keyboardType="number-pad"
+                  mode="outlined"
+                  selectTextOnFocus
+                  accessibilityLabel="Segundos"
+                  right={<TextInput.Affix text="s" />}
+                  style={styles.timeInput}
+                  outlineStyle={styles.timeOutline}
+                  outlineColor="#C9D2E3"
+                  activeOutlineColor={palette.primary}
+                />
+              </View>
 
               <Text style={styles.fieldLabel}>Notas</Text>
               <TextInput
                 value={editNotes}
                 onChangeText={setEditNotes}
                 multiline
+                numberOfLines={3}
                 mode="outlined"
                 style={styles.notesInput}
+                outlineStyle={{ borderRadius: 10 }}
                 outlineColor={palette.border}
                 activeOutlineColor={palette.primary}
               />
 
-              <View style={styles.modalActions}>
-                <Button mode="contained" onPress={handlePatch} style={styles.actionButton}>
-                  Guardar
+              <View style={styles.sheetActions}>
+                <Button mode="text" onPress={hideModal} textColor={palette.secondaryText}>
+                  Cancelar
                 </Button>
-                <Button mode="outlined" onPress={hideModal} style={styles.actionButton}>
-                  Cerrar
+                <Button mode="contained" onPress={handlePatch} style={styles.saveButton}>
+                  Guardar cambios
                 </Button>
               </View>
-            </View>
+            </ScrollView>
           )}
         </Modal>
       </Portal>
 
-      <View style={styles.hero}>
-        <Text style={styles.eyebrow}>Panel de asignaciones</Text>
-        <Text style={styles.heroTitle}>Control mensual del programa</Text>
-        <Text style={styles.heroSubtitle}>
-          Filtra por fecha y sala, revisa estados rapidamente y actualiza notas en un solo flujo.
-        </Text>
+      <View style={styles.titleRow}>
+        <Text style={styles.title}>Asignaciones</Text>
+        <Pressable onPress={signOut} accessibilityRole="button" hitSlop={8} style={styles.signOut}>
+          <Text style={styles.signOutText}>Cerrar sesión</Text>
+        </Pressable>
       </View>
 
-      <View style={styles.filtersCard}>
-        <Menu
-          visible={monthMenuVisible}
-          onDismiss={() => setMonthMenuVisible(false)}
-          contentStyle={styles.dropdownMenu}
-          anchor={
-            <Button
-              mode="outlined"
-              onPress={() => setMonthMenuVisible(true)}
-              style={styles.filterButton}
-              labelStyle={styles.filterButtonLabel}>
-              {monthLabel}
-            </Button>
-          }>
-          {MONTHS.map((m) => (
-            <Menu.Item
-              key={m.value}
-              onPress={() => {
+      <View style={styles.form}>
+        <View style={styles.formRow}>
+          <Select
+            style={styles.monthField}
+            label="Mes"
+            value={monthLabel}
+            options={MONTHS.map((m) => ({
+              key: String(m.value),
+              label: m.label,
+              selected: month === m.value,
+              onSelect: () => {
                 setMonth(m.value);
                 setSelectedDay(null);
                 setSelectedRoom(null);
-                setMonthMenuVisible(false);
-              }}
-              title={m.label}
-              style={month === m.value ? styles.dropdownItemActive : undefined}
-              titleStyle={[
-                styles.dropdownItemText,
-                month === m.value ? styles.dropdownItemTextActive : undefined,
-              ]}
-            />
-          ))}
-        </Menu>
-
-        <Menu
-          visible={yearMenuVisible}
-          onDismiss={() => setYearMenuVisible(false)}
-          contentStyle={styles.dropdownMenu}
-          anchor={
-            <Button
-              mode="outlined"
-              onPress={() => setYearMenuVisible(true)}
-              style={styles.filterButton}
-              labelStyle={styles.filterButtonLabel}>
-              {String(year)}
-            </Button>
-          }>
-          {YEARS.map((itemYear) => (
-            <Menu.Item
-              key={itemYear}
-              onPress={() => {
-                setYear(itemYear);
-                setYearMenuVisible(false);
-              }}
-              title={itemYear.toString()}
-              style={year === itemYear ? styles.dropdownItemActive : undefined}
-              titleStyle={[
-                styles.dropdownItemText,
-                year === itemYear ? styles.dropdownItemTextActive : undefined,
-              ]}
-            />
-          ))}
-        </Menu>
-
-        <Menu
-          visible={roomMenuVisible}
-          onDismiss={() => setRoomMenuVisible(false)}
-          contentStyle={styles.dropdownMenu}
-          anchor={
-            <Button
-              mode="outlined"
-              onPress={() => setRoomMenuVisible(true)}
-              style={styles.filterButton}
-              labelStyle={styles.filterButtonLabel}>
-              {selectedRoom || 'Sala'}
-            </Button>
-          }>
-          <Menu.Item
-            key="all-rooms"
-            onPress={() => {
-              setSelectedRoom(null);
-              setRoomMenuVisible(false);
-            }}
-            title="Todas las salas"
-            style={!selectedRoom ? styles.dropdownItemActive : undefined}
-            titleStyle={[
-              styles.dropdownItemText,
-              !selectedRoom ? styles.dropdownItemTextActive : undefined,
-            ]}
+              },
+            }))}
           />
-          {roomOptions.map((room) => (
-            <Menu.Item
-              key={room}
-              onPress={() => {
-                setSelectedRoom(room);
-                setRoomMenuVisible(false);
-              }}
-              title={room}
-              style={selectedRoom === room ? styles.dropdownItemActive : undefined}
-              titleStyle={[
-                styles.dropdownItemText,
-                selectedRoom === room ? styles.dropdownItemTextActive : undefined,
-              ]}
-            />
-          ))}
-        </Menu>
-
-        <Menu
-          visible={dayMenuVisible}
-          onDismiss={() => setDayMenuVisible(false)}
-          contentStyle={styles.dropdownMenu}
-          anchor={
-            <Button
-              mode="outlined"
-              onPress={() => setDayMenuVisible(true)}
-              style={styles.filterButton}
-              labelStyle={styles.filterButtonLabel}>
-              {selectedDay || 'Dia'}
-            </Button>
-          }>
-          <Menu.Item
-            key="all-days"
-            onPress={() => {
-              setSelectedDay(null);
-              setDayMenuVisible(false);
-            }}
-            title="Todos los dias"
-            style={!selectedDay ? styles.dropdownItemActive : undefined}
-            titleStyle={[
-              styles.dropdownItemText,
-              !selectedDay ? styles.dropdownItemTextActive : undefined,
-            ]}
+          <Select
+            style={styles.yearField}
+            label="Año"
+            value={String(year)}
+            options={YEARS.map((y) => ({
+              key: String(y),
+              label: String(y),
+              selected: year === y,
+              onSelect: () => setYear(y),
+            }))}
           />
-          {dayOptions.map((day) => (
-            <Menu.Item
-              key={day}
-              onPress={() => {
-                setSelectedDay(day);
-                setDayMenuVisible(false);
-              }}
-              title={day}
-              style={selectedDay === day ? styles.dropdownItemActive : undefined}
-              titleStyle={[
-                styles.dropdownItemText,
-                selectedDay === day ? styles.dropdownItemTextActive : undefined,
-              ]}
-            />
-          ))}
-        </Menu>
-      </View>
+        </View>
 
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Asignaciones del mes</Text>
-        <Text style={styles.sectionCaption}>{filteredData.length} registros</Text>
+        <Select
+          label="Sala"
+          value={selectedRoom ?? 'Todas las salas'}
+          disabled={roomOptions.length === 0}
+          options={[
+            { key: 'all', label: 'Todas las salas', selected: !selectedRoom, onSelect: () => setSelectedRoom(null) },
+            ...roomOptions.map((room) => ({
+              key: room,
+              label: room,
+              selected: selectedRoom === room,
+              onSelect: () => setSelectedRoom(room),
+            })),
+          ]}
+        />
+
+        <Select
+          label="Día"
+          value={selectedDay ? longDate(selectedDay) : 'Todos los días'}
+          disabled={dayOptions.length === 0}
+          options={[
+            { key: 'all', label: 'Todos los días', selected: !selectedDay, onSelect: () => setSelectedDay(null) },
+            ...dayOptions.map((day) => ({
+              key: day,
+              label: longDate(day),
+              selected: selectedDay === day,
+              onSelect: () => setSelectedDay(day),
+            })),
+          ]}
+        />
       </View>
 
       {loading ? (
         <View style={styles.loadingWrap}>
           <ActivityIndicator animating size="large" color={palette.primary} />
         </View>
-      ) : (
-        <View style={styles.listWrap}>
-          {filteredData.map((item) => {
-            let icon = 'alert-circle-outline';
-            let iconColor: string = palette.warning;
-
-            if (item.attended_display === 'ASISTIO') {
-              icon = 'check-circle-outline';
-              iconColor = palette.success;
-            } else if (item.attended_display === 'NO ASISTIO') {
-              icon = 'close-circle-outline';
-              iconColor = palette.danger;
-            }
-
-            return (
-              <TouchableOpacity key={item.id} onPress={() => showModal(item)} activeOpacity={0.88}>
-                <List.Item
-                  title={`${item.asignation_type.type_name}`}
-                  description={
-                    `${item.person.name}${item.helper ? ` (Ayudante: ${item.helper.name})` : ''}\n` +
-                    `Sala: ${item.room_display}\n` +
-                    `Estado: ${item.attended_display || 'PENDIENTE'}\n` +
-                    `Fecha: ${item.asignation_date}`
-                  }
-                  descriptionNumberOfLines={6}
-                  left={(props) => <List.Icon {...props} icon={icon} color={iconColor} />}
-                  right={(props) => <List.Icon {...props} icon="chevron-right" color={palette.icon} />}
-                  style={styles.asignationItem}
-                  titleStyle={styles.itemTitle}
-                  descriptionStyle={styles.itemDescription}
-                />
-              </TouchableOpacity>
-            );
-          })}
-
-          {filteredData.length === 0 && (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyTitle}>Sin resultados para los filtros seleccionados</Text>
-              <Text style={styles.emptyText}>Cambia el dia o la sala para ver otras asignaciones.</Text>
-            </View>
-          )}
+      ) : error ? (
+        <View style={styles.emptyWrap}>
+          <Text style={styles.emptyTitle}>No hay conexión con el servidor</Text>
+          <Text style={styles.emptyText}>
+            Comprueba que el backend esté en marcha en {API_URL} y vuelve a intentarlo.
+          </Text>
+          <Button mode="outlined" onPress={loadData} style={styles.retryButton}>
+            Reintentar
+          </Button>
         </View>
+      ) : groups.length === 0 ? (
+        <View style={styles.emptyWrap}>
+          <Text style={styles.emptyTitle}>
+            {hasFilters ? 'Ninguna asignación coincide' : `Sin asignaciones en ${monthLabel.toLowerCase()} de ${year}`}
+          </Text>
+          <Text style={styles.emptyText}>
+            {hasFilters
+              ? 'Cambia la sala o el día para ver más asignaciones.'
+              : 'Elige otro mes o año en los campos de arriba.'}
+          </Text>
+        </View>
+      ) : (
+        groups.map((group) => (
+          <View key={group.date} style={styles.dayBlock}>
+            <View style={styles.dayHeader}>
+              <Text style={styles.dayTitle}>{longDate(group.date)}</Text>
+              <Text style={styles.dayCount}>
+                {group.items.length} {group.items.length === 1 ? 'asignación' : 'asignaciones'}
+              </Text>
+            </View>
+
+            {group.items.map((item, index) => {
+              const status = statusOf(item.attended_display);
+              const timer = timerFor(item);
+              const elapsed = elapsedOf(timer, now);
+              const running = timer.startedAt !== null;
+              const hasTimer = !!timers[item.id] || (item.tiempo ?? 0) > 0;
+              return (
+                <Pressable
+                  key={item.id}
+                  onPress={() => showModal(item)}
+                  accessibilityRole="button"
+                  style={({ pressed }) => [
+                    styles.row,
+                    index > 0 && styles.rowDivider,
+                    pressed && styles.rowPressed,
+                  ]}>
+                  <Text style={styles.rowNumber}>{item.asignation_number_display}</Text>
+                  <View style={styles.rowMain}>
+                    <Text style={styles.rowTitle}>{item.asignation_type.type_name}</Text>
+                    <Text style={styles.rowPerson}>
+                      {item.person.name}
+                      {item.helper ? <Text style={styles.rowHelper}> con {item.helper.name}</Text> : null}
+                    </Text>
+                    <View style={styles.statusLine}>
+                      <View style={[styles.statusDot, { backgroundColor: status.color }]} />
+                      <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
+                      <Text style={styles.rowRoom}>{item.room_display}</Text>
+                    </View>
+                    {hasTimer && (
+                      <TimerActions
+                        elapsed={elapsed}
+                        saved={item.tiempo ?? 0}
+                        running={running}
+                        sync={syncing[item.id]}
+                        onSync={() => syncTimer(item)}
+                        onReset={() => resetTimer(item.id)}
+                      />
+                    )}
+                  </View>
+                  <TimerControl elapsed={elapsed} running={running} onToggle={() => toggleTimer(item)} />
+                </Pressable>
+              );
+            })}
+          </View>
+        ))
       )}
     </ScrollView>
   );
@@ -462,224 +586,298 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   page: {
     flex: 1,
-    backgroundColor: '#EEF3FF',
+    backgroundColor: palette.surface,
   },
   pageContent: {
-    paddingHorizontal: 16,
-    paddingTop: 18,
-    paddingBottom: 28,
+    paddingHorizontal: 20,
+    paddingTop: 52,
+    paddingBottom: 120, // clear the floating tab bar
+    gap: 18,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  signOut: {
+    minHeight: 40,
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  signOutText: {
+    color: palette.primary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  title: {
+    color: INK,
+    fontSize: 30,
+    fontWeight: '800',
+    letterSpacing: -0.8,
+  },
+
+  // Form controls.
+  form: {
     gap: 14,
   },
-  bgBlobTop: {
-    position: 'absolute',
-    top: -80,
-    right: -50,
-    width: 220,
-    height: 220,
-    borderRadius: 120,
-    backgroundColor: '#DCE8FF',
-  },
-  bgBlobBottom: {
-    position: 'absolute',
-    bottom: 90,
-    left: -70,
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    backgroundColor: '#E6F7F3',
-  },
-  hero: {
-    backgroundColor: '#F8FBFF',
-    borderRadius: 28,
-    paddingVertical: 20,
-    paddingHorizontal: 18,
-    borderWidth: 1,
-    borderColor: '#DDE7FB',
-    shadowColor: '#163B8A',
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 3,
-  },
-  eyebrow: {
-    color: palette.primary,
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-  },
-  heroTitle: {
-    color: palette.text,
-    fontSize: 26,
-    fontWeight: '800',
-    marginTop: 6,
-  },
-  heroSubtitle: {
-    color: palette.secondaryText,
-    fontSize: 14,
-    lineHeight: 20,
-    marginTop: 6,
-  },
-  filtersCard: {
-    backgroundColor: '#FAFCFF',
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: '#DFE8F8',
-    padding: 12,
-    gap: 8,
-    shadowColor: '#163B8A',
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 2,
-  },
-  filterButton: {
-    borderColor: '#D6E0F6',
-    borderRadius: 999,
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
-  },
-  filterButtonLabel: {
-    color: palette.text,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  dropdownMenu: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#D9E4F8',
-    shadowColor: '#163B8A',
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-  },
-  dropdownItemActive: {
-    backgroundColor: '#E8F0FF',
-    borderRadius: 14,
-  },
-  dropdownItemText: {
-    color: palette.text,
-    fontWeight: '600',
-  },
-  dropdownItemTextActive: {
-    color: palette.primary,
-    fontWeight: '800',
-  },
-  sectionHeader: {
+  formRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'baseline',
-    paddingHorizontal: 2,
-    marginTop: 2,
+    gap: 12,
   },
-  sectionTitle: {
-    color: palette.text,
-    fontSize: 19,
-    fontWeight: '800',
+  monthField: {
+    flex: 2,
   },
-  sectionCaption: {
-    color: palette.secondaryText,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  loadingWrap: {
-    paddingVertical: 24,
-  },
-  listWrap: {
-    gap: 10,
-  },
-  asignationItem: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: '#DFE8F8',
-    paddingVertical: 4,
-    shadowColor: '#163B8A',
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 2,
-  },
-  itemTitle: {
-    color: palette.text,
-    fontWeight: '700',
-    fontSize: 15,
-  },
-  itemDescription: {
-    color: palette.secondaryText,
-    marginTop: 2,
-    lineHeight: 19,
-  },
-  modalContainer: {
-    backgroundColor: '#FFFFFF',
-    marginHorizontal: 16,
-    borderRadius: 26,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: '#DCE6FA',
-    shadowColor: '#163B8A',
-    shadowOpacity: 0.1,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 8 },
-  },
-  modalTitle: {
-    textAlign: 'center',
-    marginBottom: 10,
-    color: palette.text,
-    fontWeight: '800',
-  },
-  modalText: {
-    color: palette.secondaryText,
-    marginBottom: 2,
-  },
-  modalStrong: {
-    color: palette.text,
-    fontWeight: '700',
-  },
-  fieldLabel: {
-    marginTop: 12,
-    marginBottom: 6,
-    color: palette.text,
-    fontWeight: '700',
-  },
-  fieldButton: {
-    borderColor: '#D6E0F6',
-    borderRadius: 14,
-    backgroundColor: '#F7FAFF',
-  },
-  fieldButtonLabel: {
-    color: palette.text,
-    fontWeight: '700',
-  },
-  notesInput: {
-    backgroundColor: '#F7FAFF',
-    marginBottom: 4,
-  },
-  modalActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 16,
-    gap: 10,
-  },
-  actionButton: {
+  yearField: {
     flex: 1,
   },
-  emptyCard: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#DFE8F8',
+  loadingWrap: {
+    paddingVertical: 48,
+  },
+
+  // One block per meeting day: full-width header, then the program rows.
+  dayBlock: {
+    borderRadius: 10,
     borderWidth: 1,
-    borderRadius: 20,
-    padding: 16,
+    borderColor: HAIRLINE,
+    overflow: 'hidden',
+  },
+  dayHeader: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    backgroundColor: '#F4F6FA',
+  },
+  dayTitle: {
+    flexShrink: 1,
+    color: INK,
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  dayCount: {
+    color: MUTED,
+    fontSize: 13,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 64,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    gap: 12,
+    backgroundColor: palette.surface,
+  },
+  rowDivider: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: HAIRLINE,
+  },
+  rowPressed: {
+    backgroundColor: '#F4F6FA',
+  },
+  rowNumber: {
+    width: 20,
+    color: MUTED,
+    fontSize: 16,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
+  rowMain: {
+    flex: 1,
+    gap: 2,
+  },
+  rowTitle: {
+    color: INK,
+    fontSize: 15,
+    fontWeight: '700',
+    lineHeight: 20,
+  },
+  rowPerson: {
+    color: INK,
+    fontSize: 14,
+    lineHeight: 19,
+  },
+  rowHelper: {
+    color: MUTED,
+  },
+  timer: {
+    alignItems: 'flex-end',
+    gap: 4,
+  },
+  timerText: {
+    color: MUTED,
+    fontSize: 15,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
+  },
+  timerTextRunning: {
+    color: palette.primary,
+  },
+  timerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  timerButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: palette.primary,
+    backgroundColor: palette.surface,
+  },
+  timerButtonRunning: {
+    backgroundColor: palette.primary,
+  },
+  timerActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    columnGap: 16,
+    marginTop: 2,
+  },
+  actionLink: {
+    minHeight: 36,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  actionText: {
+    color: palette.primary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  actionMuted: {
+    color: MUTED,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  playIcon: {
+    marginLeft: 2, // optical centering of the triangle
+  },
+  statusLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  statusText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  rowRoom: {
+    color: MUTED,
+    fontSize: 13,
+    marginLeft: 6,
+  },
+
+  emptyWrap: {
+    paddingVertical: 36,
+    gap: 6,
   },
   emptyTitle: {
-    color: palette.text,
-    fontSize: 15,
+    color: INK,
+    fontSize: 18,
     fontWeight: '700',
   },
   emptyText: {
-    color: palette.secondaryText,
-    marginTop: 4,
-    lineHeight: 20,
+    color: MUTED,
+    fontSize: 15,
+    lineHeight: 21,
+  },
+  retryButton: {
+    marginTop: 12,
+    alignSelf: 'flex-start',
+    borderRadius: 8,
+  },
+
+  // Edit sheet, anchored to the bottom of the screen.
+  sheetWrapper: {
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    backgroundColor: palette.surface,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 20,
+    paddingTop: 22,
+    paddingBottom: 28,
+  },
+  sheetScroll: {
+    maxHeight: 560,
+  },
+  timeRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  timeInput: {
+    flex: 1,
+    minHeight: 48,
+    fontSize: 16,
+    backgroundColor: palette.surface,
+  },
+  timeOutline: {
+    borderRadius: 10,
+  },
+  sheetTitle: {
+    color: INK,
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: -0.4,
+  },
+  sheetSubtitle: {
+    color: MUTED,
+    fontSize: 14,
+    marginTop: 2,
+  },
+  detailBlock: {
+    marginTop: 16,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: HAIRLINE,
+    paddingVertical: 4,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    gap: 12,
+  },
+  detailLabel: {
+    color: MUTED,
+  },
+  detailValue: {
+    color: INK,
+    fontWeight: '600',
+    flexShrink: 1,
+    textAlign: 'right',
+  },
+  fieldLabel: {
+    marginTop: 18,
+    marginBottom: 8,
+    color: INK,
+    fontWeight: '700',
+  },
+  notesInput: {
+    backgroundColor: palette.surface,
+    minHeight: 80,
+  },
+  sheetActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    marginTop: 20,
+    gap: 8,
+  },
+  saveButton: {
+    borderRadius: 8,
   },
 });

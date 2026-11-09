@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import React from 'react';
 import { Platform } from 'react-native';
@@ -55,12 +56,20 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="explore"
+        name="vymc"
         options={{
-          title: 'Resumen',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
+          title: 'VyMC',
+          tabBarIcon: ({ color }) => <Ionicons name="book-outline" size={28} color={color} />,
         }}
       />
+      <Tabs.Screen
+        name="privilegios"
+        options={{
+          title: 'Privilegios',
+          tabBarIcon: ({ color }) => <Ionicons name="people-outline" size={28} color={color} />,
+        }}
+      />
+      <Tabs.Screen name="explore" options={{ href: null }} />
     </Tabs>
   );
 }

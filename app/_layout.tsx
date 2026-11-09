@@ -7,6 +7,8 @@ import 'react-native-reanimated';
 import { Colors } from '@/constants/Colors';
 import { MD3LightTheme, PaperProvider } from 'react-native-paper';
 
+import { AuthProvider, useAuth } from '@/lib/auth';
+
 const navTheme = {
   ...DefaultTheme,
   colors: {
@@ -34,6 +36,26 @@ const paperTheme = {
   },
 };
 
+function RootNavigator() {
+  const { status } = useAuth();
+
+  // Wait for the stored session to load so the login screen doesn't flash.
+  if (status === 'loading') return null;
+  const signedIn = status === 'signedIn';
+
+  return (
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Protected guard={signedIn}>
+        <Stack.Screen name="(tabs)" />
+      </Stack.Protected>
+      <Stack.Protected guard={!signedIn}>
+        <Stack.Screen name="login" />
+      </Stack.Protected>
+      <Stack.Screen name="+not-found" options={{ headerShown: true }} />
+    </Stack>
+  );
+}
+
 export default function RootLayout() {
   const [loaded] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
@@ -47,10 +69,9 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={navTheme}>
       <PaperProvider theme={paperTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="+not-found" />
-      </Stack>
+        <AuthProvider>
+          <RootNavigator />
+        </AuthProvider>
       <StatusBar style="dark" />
       </PaperProvider>
     </ThemeProvider>
