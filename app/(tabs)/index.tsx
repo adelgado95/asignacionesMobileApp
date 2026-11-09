@@ -14,6 +14,8 @@ import {
 
 import { Colors } from '@/constants/Colors';
 import { API_URL } from '@/constants/api';
+import { ScreenHeader } from '@/components/ScreenHeader';
+import { useHideTabBarOnScroll } from '@/lib/tabBarVisibility';
 import { Select } from '@/components/Select';
 import { useAuth } from '@/lib/auth';
 import { MONTHS, YEARS, longDate, parseDay } from '@/lib/dates';
@@ -140,7 +142,8 @@ function TimerActions({
 }
 
 export default function HomeScreen() {
-  const { authFetch, signOut } = useAuth();
+  const { authFetch } = useAuth();
+  const scrollProps = useHideTabBarOnScroll();
 
   const [data, setData] = useState<Asignation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -328,7 +331,7 @@ export default function HomeScreen() {
   const hasFilters = !!(selectedRoom || selectedDay);
 
   return (
-    <ScrollView style={styles.page} contentContainerStyle={styles.pageContent}>
+    <ScrollView style={styles.page} contentContainerStyle={styles.pageContent} {...scrollProps}>
       <Portal>
         <Modal
           visible={visible}
@@ -430,12 +433,7 @@ export default function HomeScreen() {
         </Modal>
       </Portal>
 
-      <View style={styles.titleRow}>
-        <Text style={styles.title}>Asignaciones</Text>
-        <Pressable onPress={signOut} accessibilityRole="button" hitSlop={8} style={styles.signOut}>
-          <Text style={styles.signOutText}>Cerrar sesión</Text>
-        </Pressable>
-      </View>
+      <ScreenHeader title="Asignaciones" />
 
       <View style={styles.form}>
         <View style={styles.formRow}>
@@ -593,22 +591,6 @@ const styles = StyleSheet.create({
     paddingTop: 52,
     paddingBottom: 120, // clear the floating tab bar
     gap: 18,
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  signOut: {
-    minHeight: 40,
-    justifyContent: 'center',
-    paddingHorizontal: 4,
-  },
-  signOutText: {
-    color: palette.primary,
-    fontSize: 14,
-    fontWeight: '600',
   },
   title: {
     color: INK,

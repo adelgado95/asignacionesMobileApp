@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Button, Text } from 'react-native-paper';
 
+import { ScreenHeader } from '@/components/ScreenHeader';
+import { useHideTabBarOnScroll } from '@/lib/tabBarVisibility';
 import { Select } from '@/components/Select';
 import { Colors } from '@/constants/Colors';
 import { API_URL } from '@/constants/api';
@@ -48,6 +50,7 @@ const TODAY_ISO = `${today.getFullYear()}-${String(today.getMonth() + 1).padStar
 
 export default function PrivilegiosScreen() {
   const { authFetch } = useAuth();
+  const scrollProps = useHideTabBarOnScroll();
   const [data, setData] = useState<Programa[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -78,8 +81,8 @@ export default function PrivilegiosScreen() {
   const nextId = data.find((p) => p.fecha >= TODAY_ISO)?.id;
 
   return (
-    <ScrollView style={styles.page} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Privilegios</Text>
+    <ScrollView style={styles.page} contentContainerStyle={styles.content} {...scrollProps}>
+      <ScreenHeader title="Privilegios" />
 
       <View style={styles.formRow}>
         <Select

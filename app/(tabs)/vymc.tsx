@@ -1,11 +1,14 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Button, Text } from 'react-native-paper';
 
+import { ScreenHeader } from '@/components/ScreenHeader';
+import { useHideTabBarOnScroll } from '@/lib/tabBarVisibility';
 import { Select } from '@/components/Select';
 import { Colors } from '@/constants/Colors';
 import { API_URL } from '@/constants/api';
 import { useAuth } from '@/lib/auth';
+import { TimerActions, TimerControl, elapsedOf, useStopwatches } from '@/components/Stopwatch';
 import { MONTHS, YEARS, longDate } from '@/lib/dates';
 
 const palette = Colors.light;
@@ -29,6 +32,7 @@ type ApiParte = {
   minutos: number | null;
   principal: string | null;
   auxiliar: string | null;
+  tiempo: number | null; // real duration in seconds
 };
 
 type ApiAcomodadores = {
@@ -60,14 +64,15 @@ type ApiWeek = {
   oracion_inicial: string | null;
   oracion_final: string | null;
   partes: ApiParte[];
-  estudio_biblico: { numero: number; titulo: string; minutos: number; conductor: string | null; lector: string | null };
+  estudio_biblico: { numero: number; titulo: string; minutos: number; conductor: string | null; lector: string | null; tiempo: number | null };
   acomodadores: ApiAcomodadores[];
 };
 
 // ---------- Program model (what the screen draws) ----------
 
 type Line = { label?: string; value: string };
-type Row = { kind: 'bullet' | 'part'; text: string; lines: Line[] };
+type RowTimer = { weekId: number; numero: number; saved: number; limit: number | null };
+type Row = { kind: 'bullet' | 'part'; text: string; lines: Line[]; timer?: RowTimer };
 type Section = { title?: string; color: string; rows: Row[] };
 type Program = {
   week: string;
@@ -80,13 +85,14 @@ type Program = {
 const dash = (v?: string | null) => v || '—';
 const song = (n: number | null) => (n ? `Canción ${n}` : 'Canción');
 
-const parteRow = (p: ApiParte): Row => ({
+const parteRow = (weekId: number) => (p: ApiParte): Row => ({
   kind: 'part',
   text: `${p.numero}. ${p.titulo || 'Por asignar'}${p.minutos ? ` (${p.minutos} mins.)` : ''}`,
   lines: [
     { value: dash(p.principal) },
     ...(p.auxiliar ? [{ label: 'Sala auxiliar', value: p.auxiliar }] : []),
   ],
+  timer: { weekId, numero: p.numero, saved: p.tiempo ?? 0, limit: p.minutos },
 });
 
 const ACOMODADOR_FIELDS: { key: keyof ApiAcomodadores; label: string }[] = [
@@ -103,7 +109,7 @@ const ACOMODADOR_FIELDS: { key: keyof ApiAcomodadores; label: string }[] = [
 ];
 
 function toProgram(w: ApiWeek): Program {
-  const parts = (s: ApiParte['seccion']) => w.partes.filter((p) => p.seccion === s).map(parteRow);
+  const parts = (s: ApiParte['seccion']) => w.partes.filter((p) => p.seccion === s).map(parteRow(w.id));
   const e = w.estudio_biblico;
   const sections: Section[] = [
     {
@@ -132,6 +138,7 @@ function toProgram(w: ApiWeek): Program {
             { label: 'Conductor', value: dash(e.conductor) },
             { label: 'Lector', value: dash(e.lector) },
           ],
+          timer: { weekId: w.id, numero: e.numero, saved: e.tiempo ?? 0, limit: e.minutos },
         },
         { kind: 'bullet', text: 'Palabras de conclusión (3 min.)', lines: [] },
         {
@@ -180,28 +187,48 @@ function SectionBar({ title, color }: { title: string; color: string }) {
   );
 }
 
-function RowView({ row, color, first }: { row: Row; color: string; first: boolean }) {
+function RowView({
+  row,
+  color,
+  first,
+  control,
+  actions,
+}: {
+  row: Row;
+  color: string;
+  first: boolean;
+  control?: React.ReactNode; // stopwatch, on the same line as the title
+  actions?: React.ReactNode; // save status, below
+}) {
   return (
     <View style={[styles.row, !first && styles.rowDivider]}>
-      <Text style={styles.rowTitle}>
-        {row.kind === 'bullet' ? <Text style={{ color }}>●  </Text> : null}
-        {row.text}
-      </Text>
-      {row.lines.map((l, i) => (
-        <InfoLine key={i} label={l.label} value={l.value} />
-      ))}
+      <View style={styles.rowTop}>
+        <View style={styles.rowMain}>
+          <Text style={styles.rowTitle}>
+            {row.kind === 'bullet' ? <Text style={{ color }}>●  </Text> : null}
+            {row.text}
+          </Text>
+          {row.lines.map((l, i) => (
+            <InfoLine key={i} label={l.label} value={l.value} />
+          ))}
+        </View>
+        {control}
+      </View>
+      {actions}
     </View>
   );
 }
 
 export default function VyMCScreen() {
   const { authFetch } = useAuth();
+  const scrollProps = useHideTabBarOnScroll();
   const [weeks, setWeeks] = useState<ApiWeek[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [month, setMonth] = useState(today.getMonth() + 1);
   const [year, setYear] = useState(today.getFullYear());
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const sw = useStopwatches();
 
   const load = async () => {
     setLoading(true);
@@ -231,11 +258,116 @@ export default function VyMCScreen() {
     }
   }, [weeks]);
 
+  const keyOf = (t: RowTimer) => `${t.weekId}:${t.numero}`;
+
+  // Pauses the stopwatch and stores its time for that part (the study is saved on the week).
+  const syncPart = async (t: RowTimer) => {
+    const key = keyOf(t);
+    const seconds = sw.freeze(key, t.saved);
+    sw.setSync(key, 'saving');
+    try {
+      const res = await authFetch(`/api/vymc/${t.weekId}/tiempo/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ numero: t.numero, tiempo: seconds }),
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      setWeeks((prev) =>
+        prev.map((w) =>
+          w.id !== t.weekId
+            ? w
+            : w.estudio_biblico.numero === t.numero
+              ? { ...w, estudio_biblico: { ...w.estudio_biblico, tiempo: seconds } }
+              : { ...w, partes: w.partes.map((p) => (p.numero === t.numero ? { ...p, tiempo: seconds } : p)) },
+        ),
+      );
+      sw.setSync(key, undefined);
+      sw.flashSaved(key);
+    } catch {
+      sw.setSync(key, 'error');
+    }
+  };
+
+  const timerParts = (t: RowTimer) => {
+    const key = keyOf(t);
+    const timer = sw.timerFor(key, t.saved);
+    const elapsed = elapsedOf(timer, sw.now);
+    const running = timer.startedAt !== null;
+    // Actions appear only once this stopwatch has been used; a time loaded from the backend shows just the clock.
+    const started = !!sw.timers[key];
+    return {
+      control: (
+        <TimerControl
+          inline
+          elapsed={elapsed}
+          running={running}
+          over={t.limit ? elapsed > t.limit * 60000 : false}
+          // Time already recorded in the backend: shown, but not restartable until used in this session.
+          disabled={!sw.timers[key] && t.saved > 0}
+          onToggle={() => {
+            sw.setSync(key, undefined);
+            sw.hideSaved(key);
+            sw.toggle(key, t.saved);
+          }}
+        />
+      ),
+      actions: started ? (
+        <TimerActions
+          elapsed={elapsed}
+          saved={t.saved}
+          running={running}
+          sync={sw.syncing[key]}
+          justSaved={!!sw.flash[key]}
+          onSync={() => syncPart(t)}
+          onReset={() => sw.reset(key, t.saved)}
+        />
+      ) : undefined,
+    };
+  };
+
+  // Autosave: 3 s after a stopwatch is paused with unsaved time, store it. Resuming within that time cancels it.
+  const syncPartRef = useRef(syncPart);
+  syncPartRef.current = syncPart;
+  const pending = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const allTimers = useMemo<RowTimer[]>(
+    () =>
+      weeks.flatMap((w) => [
+        ...w.partes.map((p) => ({ weekId: w.id, numero: p.numero, saved: p.tiempo ?? 0, limit: p.minutos })),
+        { weekId: w.id, numero: w.estudio_biblico.numero, saved: w.estudio_biblico.tiempo ?? 0, limit: w.estudio_biblico.minutos },
+      ]),
+    [weeks],
+  );
+
+  useEffect(() => {
+    for (const t of allTimers) {
+      const key = keyOf(t);
+      const timer = sw.timers[key];
+      const waiting =
+        !!timer &&
+        timer.startedAt === null &&
+        Math.round(timer.accumulated / 1000) !== t.saved &&
+        sw.syncing[key] === undefined; // after an error the user retries by hand
+      if (waiting && !pending.current[key]) {
+        pending.current[key] = setTimeout(() => {
+          delete pending.current[key];
+          syncPartRef.current(t);
+        }, 3000);
+      } else if (!waiting && pending.current[key]) {
+        clearTimeout(pending.current[key]);
+        delete pending.current[key];
+      }
+    }
+  }, [allTimers, sw.timers, sw.syncing]);
+
+  useEffect(() => () => Object.values(pending.current).forEach(clearTimeout), []);
+
   const selected = weeks.find((w) => w.id === selectedId) ?? null;
   const program = useMemo(() => (selected ? toProgram(selected) : null), [selected]);
 
   return (
-    <ScrollView style={styles.page} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.page} contentContainerStyle={styles.content} {...scrollProps}>
+      <ScreenHeader title="Vida y Ministerio" />
+
       <View style={styles.form}>
         <View style={styles.formRow}>
           <Select
@@ -325,7 +457,7 @@ export default function VyMCScreen() {
             <View key={i}>
               {section.title && <SectionBar title={section.title} color={section.color} />}
               {section.rows.map((row, j) => (
-                <RowView key={j} row={row} color={section.color} first={j === 0} />
+                <RowView key={j} row={row} color={section.color} first={j === 0} {...(row.timer ? timerParts(row.timer) : {})} />
               ))}
             </View>
           ))}
@@ -424,6 +556,8 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: palette.border,
   },
+  rowTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
+  rowMain: { flex: 1, gap: 3 },
   rowTitle: { color: INK, fontSize: 15, lineHeight: 21 },
   infoLine: { color: INK, fontSize: 15, fontWeight: '700', lineHeight: 21 },
   infoLabel: { color: GRAY, fontSize: 13, fontWeight: '600' },
