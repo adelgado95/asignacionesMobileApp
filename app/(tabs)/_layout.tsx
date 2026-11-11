@@ -5,11 +5,12 @@ import { StyleSheet } from 'react-native';
 
 import { HapticTab } from '@/components/HapticTab';
 import TabBarBackground from '@/components/ui/TabBarBackground';
-import { Colors } from '@/constants/Colors';
+import { useTheme } from '@/lib/theme';
 import { SideMenuProvider } from '@/lib/sideMenu';
 import { HidingTabBar, TabBarVisibilityProvider } from '@/lib/tabBarVisibility';
 
 export default function TabLayout() {
+  const { palette } = useTheme();
   return (
     <TabBarVisibilityProvider>
     <SideMenuProvider>
@@ -17,8 +18,8 @@ export default function TabLayout() {
       tabBar={(props) => <HidingTabBar {...props} />}
       initialRouteName="vymc"
       screenOptions={{
-        tabBarActiveTintColor: Colors.light.tint,
-        tabBarInactiveTintColor: Colors.light.tabIconDefault,
+        tabBarActiveTintColor: palette.tint,
+        tabBarInactiveTintColor: palette.tabIconDefault,
         headerShown: false,
         tabBarButton: HapticTab,
         tabBarBackground: TabBarBackground,
@@ -30,9 +31,9 @@ export default function TabLayout() {
         tabBarStyle: {
           height: 72,
           paddingBottom: 8,
-          backgroundColor: Colors.light.surface,
+          backgroundColor: palette.surface,
           borderTopWidth: StyleSheet.hairlineWidth,
-          borderTopColor: Colors.light.border,
+          borderTopColor: palette.border,
         },
       }}>
       <Tabs.Screen

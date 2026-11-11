@@ -1,24 +1,25 @@
 import React, { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Button, Text } from 'react-native-paper';
 
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { useHideTabBarOnScroll } from '@/lib/tabBarVisibility';
 import { Select } from '@/components/Select';
-import { Colors } from '@/constants/Colors';
+import type { Palette } from '@/constants/Colors';
+import { useThemed } from '@/lib/theme';
 import { API_URL } from '@/constants/api';
 import { useAuth } from '@/lib/auth';
 import { MONTHS, YEARS, longDate } from '@/lib/dates';
-
-const palette = Colors.light;
-const INK = palette.text;
 
 type Person = { id: number; name: string };
 type Programa = {
   id: number;
   fecha: string;
   dia: string;
-  [key: string]: Person | string | number | null;
+  asistio?: Record<string, boolean | null>; // por privilegio: null pendiente, true asistió, false no asistió
+  puede_marcar?: boolean; // anciano o siervo ministerial
+  [key: string]: Person | string | number | boolean | Record<string, boolean | null> | null | undefined;
 };
 
 // Orden y nombre de cada privilegio; los pares comparten grupo para leerse de un vistazo.
@@ -48,8 +49,15 @@ const GROUPS: { title: string; items: { key: string; label: string }[] }[] = [
 const today = new Date();
 const TODAY_ISO = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
+// Computed at call time (not at load) so a screen left open past midnight locks yesterday's meeting.
+const isPast = (fecha: string) => {
+  const d = new Date();
+  return fecha < `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
 export default function PrivilegiosScreen() {
   const { authFetch } = useAuth();
+  const { palette, styles } = useThemed(makeStyles);
   const scrollProps = useHideTabBarOnScroll();
   const [data, setData] = useState<Programa[]>([]);
   const [loading, setLoading] = useState(true);
@@ -77,6 +85,34 @@ export default function PrivilegiosScreen() {
   useEffect(() => {
     load();
   }, [month, year]);
+
+  // Registra si la persona cumplió su privilegio (solo ancianos y siervos ministeriales: `puede_marcar`).
+  // Es de un solo uso: pendiente -> asistió / no asistió; después los botones quedan desactivados
+  // (corregirlo se hace en el admin de Django). Si falla, siguen disponibles.
+  const [saving, setSaving] = useState<Record<string, boolean>>({});
+  const [failed, setFailed] = useState<{ id: string; msg: string } | null>(null);
+  const markAsistio = async (p: Programa, key: string, value: boolean) => {
+    const id = `${p.id}:${key}`;
+    setSaving((s) => ({ ...s, [id]: true }));
+    setFailed(null);
+    try {
+      const res = await authFetch(`/api/programa-privilegios/${p.id}/asistio/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ privilegio: key, asistio: value }),
+      });
+      if (res.status === 403) throw new Error('Solo ancianos y siervos ministeriales pueden marcar la asistencia.');
+      if (res.status === 409) throw new Error('La asistencia ya estaba registrada. Actualiza la pantalla.');
+      if (!res.ok) throw new Error('No se pudo guardar. Inténtalo de nuevo.');
+      setData((prev) =>
+        prev.map((x) => (x.id === p.id ? { ...x, asistio: { ...(x.asistio ?? {}), [key]: value } } : x)),
+      );
+    } catch (e) {
+      setFailed({ id, msg: e instanceof Error && e.message ? e.message : 'No se pudo guardar. Inténtalo de nuevo.' });
+    } finally {
+      setSaving((s) => ({ ...s, [id]: false }));
+    }
+  };
 
   const nextId = data.find((p) => p.fecha >= TODAY_ISO)?.id;
 
@@ -142,10 +178,45 @@ export default function PrivilegiosScreen() {
                 <Text style={styles.groupTitle}>{g.title}</Text>
                 {g.items.map((it) => {
                   const person = p[it.key] as Person | null;
+                  const id = `${p.id}:${it.key}`;
+                  const state = p.asistio?.[it.key] ?? null; // null = pendiente
+                  const locked = state !== null || !!saving[id] || isPast(p.fecha); // una sola vez; las pasadas no se marcan
                   return (
-                    <View key={it.key} style={styles.row}>
-                      <Text style={styles.label}>{it.label}</Text>
-                      <Text style={[styles.value, !person && styles.empty]}>{person?.name ?? '—'}</Text>
+                    <View key={it.key}>
+                      <View style={styles.row}>
+                        <View style={styles.who}>
+                          <Text style={styles.label}>{it.label}</Text>
+                          <Text style={[styles.value, !person && styles.empty]}>{person?.name ?? '—'}</Text>
+                        </View>
+                        {person &&
+                          (p.puede_marcar ? (
+                            <View style={styles.asistio}>
+                              <Pressable
+                                onPress={() => markAsistio(p, it.key, true)}
+                                disabled={locked}
+                                accessibilityRole="button"
+                                accessibilityLabel={`Asistió: ${it.label}, ${person.name}`}
+                                accessibilityState={{ disabled: locked, selected: state === true }}
+                                style={[styles.mark, { borderColor: palette.success }, state === true && { backgroundColor: palette.success }, locked && state !== true && styles.markDim]}>
+                                <Ionicons name="checkmark" size={22} color={state === true ? palette.onPrimary : palette.success} />
+                              </Pressable>
+                              <Pressable
+                                onPress={() => markAsistio(p, it.key, false)}
+                                disabled={locked}
+                                accessibilityRole="button"
+                                accessibilityLabel={`No asistió: ${it.label}, ${person.name}`}
+                                accessibilityState={{ disabled: locked, selected: state === false }}
+                                style={[styles.mark, { borderColor: palette.danger }, state === false && { backgroundColor: palette.danger }, locked && state !== false && styles.markDim]}>
+                                <Ionicons name="close" size={22} color={state === false ? palette.onPrimary : palette.danger} />
+                              </Pressable>
+                            </View>
+                          ) : (
+                            <Text style={[styles.asistioText, state === true && { color: palette.okText }, state === false && { color: palette.badText }]}>
+                              {state === true ? 'Asistió' : state === false ? 'No asistió' : 'Pendiente'}
+                            </Text>
+                          ))}
+                      </View>
+                      {failed?.id === id && <Text style={styles.failed}>{failed.msg}</Text>}
                     </View>
                   );
                 })}
@@ -158,7 +229,9 @@ export default function PrivilegiosScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (palette: Palette) => {
+  const INK = palette.text;
+  return StyleSheet.create({
   page: { flex: 1, backgroundColor: palette.background },
   content: { paddingHorizontal: 16, paddingTop: 52, paddingBottom: 120, gap: 16 },
   title: { color: INK, fontSize: 26, fontWeight: '800' },
@@ -195,7 +268,14 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: palette.border,
   },
+  who: { flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
   label: { color: palette.secondaryText, fontSize: 15 },
   value: { color: INK, fontSize: 16, fontWeight: '700', flexShrink: 1, textAlign: 'right' },
+  asistio: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  asistioText: { color: palette.secondaryText, fontSize: 13, fontWeight: '600' },
+  mark: { width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  markDim: { opacity: 0.3 },
+  failed: { color: palette.badText, fontSize: 13, paddingBottom: 6 },
   empty: { color: palette.tabIconDefault, fontWeight: '400' },
 });
+};

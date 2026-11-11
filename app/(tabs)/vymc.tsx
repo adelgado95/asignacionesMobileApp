@@ -4,14 +4,14 @@ import { ActivityIndicator, Button, Text } from 'react-native-paper';
 
 import { WeekHeader } from '@/components/WeekHeader';
 import { useHideTabBarOnScroll } from '@/lib/tabBarVisibility';
-import { Colors } from '@/constants/Colors';
+import type { Palette } from '@/constants/Colors';
+import { useThemed } from '@/lib/theme';
 import { API_URL } from '@/constants/api';
 import { useAuth } from '@/lib/auth';
 import { TimerActions, TimerControl, elapsedOf, useStopwatches } from '@/components/Stopwatch';
 import { longDate } from '@/lib/dates';
 import { formatWeekRange, getWeekStart, monthOfWeek, toISODate } from '@/lib/weeks';
 
-const palette = Colors.light;
 
 const SECTION = {
   tesoros: '#575A5D',
@@ -169,6 +169,7 @@ function toProgram(w: ApiWeek): Program {
 
 // "Etiqueta  Valor" line: small gray label followed by the name.
 function InfoLine({ label, value }: { label?: string; value: string }) {
+  const { styles } = useThemed(makeStyles);
   return (
     <Text style={styles.infoLine}>
       {label ? <Text style={styles.infoLabel}>{label}  </Text> : null}
@@ -178,6 +179,7 @@ function InfoLine({ label, value }: { label?: string; value: string }) {
 }
 
 function SectionBar({ title, color }: { title: string; color: string }) {
+  const { styles } = useThemed(makeStyles);
   return (
     <View style={[styles.sectionBar, { backgroundColor: color }]}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -198,6 +200,7 @@ function RowView({
   control?: React.ReactNode; // stopwatch, on the same line as the title
   actions?: React.ReactNode; // save status, below
 }) {
+  const { styles } = useThemed(makeStyles);
   return (
     <View style={[styles.row, !first && styles.rowDivider]}>
       <View style={styles.rowTop}>
@@ -218,6 +221,7 @@ function RowView({
 }
 
 export default function VyMCScreen() {
+  const { palette, styles } = useThemed(makeStyles);
   const { authFetch, signOut } = useAuth();
   const scrollProps = useHideTabBarOnScroll();
   const [weeks, setWeeks] = useState<ApiWeek[]>([]);
@@ -440,10 +444,10 @@ export default function VyMCScreen() {
   );
 }
 
-const INK = palette.text;
-const GRAY = '#7B7D7F';
-
-const styles = StyleSheet.create({
+const makeStyles = (palette: Palette) => {
+  const INK = palette.text;
+  const GRAY = palette.gray;
+  return StyleSheet.create({
   page: { flex: 1, backgroundColor: palette.surface },
   content: {
     paddingBottom: 120, // clear the floating tab bar
@@ -509,3 +513,4 @@ const styles = StyleSheet.create({
   infoLine: { color: INK, fontSize: 15, fontWeight: '700', lineHeight: 21 },
   infoLabel: { color: GRAY, fontSize: 13, fontWeight: '600' },
 });
+};

@@ -3,12 +3,9 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Text } from 'react-native-paper';
 
-import { Colors } from '@/constants/Colors';
+import type { Palette } from '@/constants/Colors';
+import { useThemed } from '@/lib/theme';
 
-const palette = Colors.light;
-const MUTED = palette.secondaryText;
-const OK = '#17754A';
-const BAD = '#B83232';
 
 export type TimerState = { accumulated: number; startedAt: number | null };
 export type SyncState = 'saving' | 'error' | undefined;
@@ -40,6 +37,8 @@ export const TimerControl = React.memo(function TimerControl({
   disabled?: boolean; // time already recorded: shown, but it cannot be restarted
   onToggle: () => void;
 }) {
+  const { palette, styles } = useThemed(makeStyles);
+  const BAD = palette.badText;
   return (
     <View style={inline ? styles.timerInline : styles.timer}>
       <Text style={[styles.timerText, running && styles.timerTextRunning, over && { color: BAD }]}>
@@ -55,7 +54,7 @@ export const TimerControl = React.memo(function TimerControl({
         <Ionicons
           name={running ? 'pause' : 'play'}
           size={20}
-          color={running ? '#FFFFFF' : palette.primary}
+          color={running ? palette.onPrimary : palette.primary}
           style={running ? undefined : styles.playIcon}
         />
       </Pressable>
@@ -83,6 +82,9 @@ export function TimerActions({
   onSync: () => void; // retry after an error
   onReset: () => void; // discards this session's time, back to the saved value
 }) {
+  const { palette, styles } = useThemed(makeStyles);
+  const BAD = palette.badText;
+  const OK = palette.okText;
   const canReset = !running && Math.round(elapsed / 1000) !== saved && sync === undefined;
 
   return (
@@ -179,7 +181,9 @@ export function useStopwatches() {
   return { now, timers, syncing, flash, timerFor, toggle, reset, freeze, setSync, flashSaved, hideSaved };
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (palette: Palette) => {
+  const MUTED = palette.secondaryText;
+  return StyleSheet.create({
   timer: { alignItems: 'flex-end', gap: 4 },
   timerInline: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   timerText: { color: MUTED, fontSize: 15, fontWeight: '600', fontVariant: ['tabular-nums'] },
@@ -202,3 +206,4 @@ const styles = StyleSheet.create({
   actionDisabled: { opacity: 0.45 },
   playIcon: { marginLeft: 2 }, // optical centering of the triangle
 });
+};

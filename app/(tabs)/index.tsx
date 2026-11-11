@@ -12,7 +12,8 @@ import {
   TextInput,
 } from 'react-native-paper';
 
-import { Colors } from '@/constants/Colors';
+import type { Palette } from '@/constants/Colors';
+import { useThemed } from '@/lib/theme';
 import { API_URL } from '@/constants/api';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { useHideTabBarOnScroll } from '@/lib/tabBarVisibility';
@@ -25,19 +26,15 @@ const today = new Date();
 const CURRENT_MONTH = today.getMonth() + 1;
 const CURRENT_YEAR = today.getFullYear();
 
-const palette = Colors.light;
-const INK = palette.text;
-const MUTED = palette.secondaryText;
-const HAIRLINE = palette.border;
+// Status text colors are darker than the base palette so they stay readable on the surface.
+const statusesFor = (p: Palette) =>
+  ({
+    success: { color: p.okText, label: 'Asistió' },
+    danger: { color: p.badText, label: 'No asistió' },
+    warning: { color: p.warnText, label: 'Pendiente' },
+  }) as const;
 
-// Status text colors are darker than the base palette so they stay readable on white.
-const STATUS = {
-  success: { color: '#17754A', label: 'Asistió' },
-  danger: { color: '#B83232', label: 'No asistió' },
-  warning: { color: '#8F5B00', label: 'Pendiente' },
-} as const;
-
-const statusOf = (display?: string | null) => {
+const statusOf = (display: string | null | undefined, STATUS: ReturnType<typeof statusesFor>) => {
   if (display === 'ASISTIO') return STATUS.success;
   if (display === 'NO ASISTIO') return STATUS.danger;
   return STATUS.warning;
@@ -68,6 +65,7 @@ const TimerControl = React.memo(function TimerControl({
   running: boolean;
   onToggle: () => void;
 }) {
+  const { palette, styles } = useThemed(makeStyles);
   return (
     <View style={styles.timer}>
       <Text style={[styles.timerText, running && styles.timerTextRunning]}>{formatElapsed(elapsed)}</Text>
@@ -79,7 +77,7 @@ const TimerControl = React.memo(function TimerControl({
         <Ionicons
           name={running ? 'pause' : 'play'}
           size={20}
-          color={running ? '#FFFFFF' : palette.primary}
+          color={running ? palette.onPrimary : palette.primary}
           style={running ? undefined : styles.playIcon}
         />
       </Pressable>
@@ -103,6 +101,9 @@ function TimerActions({
   onSync: () => void;
   onReset: () => void;
 }) {
+  const { palette, styles } = useThemed(makeStyles);
+  const STATUS = statusesFor(palette);
+  const MUTED = palette.secondaryText;
   const seconds = Math.round(elapsed / 1000);
   const dirty = seconds !== saved;
   const canReset = !running && elapsed > 0;
@@ -143,6 +144,8 @@ function TimerActions({
 
 export default function HomeScreen() {
   const { authFetch } = useAuth();
+  const { palette, styles } = useThemed(makeStyles);
+  const STATUS = statusesFor(palette);
   const scrollProps = useHideTabBarOnScroll();
 
   const [data, setData] = useState<Asignation[]>([]);
@@ -385,7 +388,7 @@ export default function HomeScreen() {
                   right={<TextInput.Affix text="min" />}
                   style={styles.timeInput}
                   outlineStyle={styles.timeOutline}
-                  outlineColor="#C9D2E3"
+                  outlineColor={palette.field}
                   activeOutlineColor={palette.primary}
                 />
                 <TextInput
@@ -402,7 +405,7 @@ export default function HomeScreen() {
                   right={<TextInput.Affix text="s" />}
                   style={styles.timeInput}
                   outlineStyle={styles.timeOutline}
-                  outlineColor="#C9D2E3"
+                  outlineColor={palette.field}
                   activeOutlineColor={palette.primary}
                 />
               </View>
@@ -532,7 +535,7 @@ export default function HomeScreen() {
             </View>
 
             {group.items.map((item, index) => {
-              const status = statusOf(item.attended_display);
+              const status = statusOf(item.attended_display, STATUS);
               const timer = timerFor(item);
               const elapsed = elapsedOf(timer, now);
               const running = timer.startedAt !== null;
@@ -581,7 +584,11 @@ export default function HomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (palette: Palette) => {
+  const INK = palette.text;
+  const MUTED = palette.secondaryText;
+  const HAIRLINE = palette.border;
+  return StyleSheet.create({
   page: {
     flex: 1,
     backgroundColor: palette.surface,
@@ -631,7 +638,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 12,
     paddingHorizontal: 14,
-    backgroundColor: '#F4F6FA',
+    backgroundColor: palette.fieldDisabled,
   },
   dayTitle: {
     flexShrink: 1,
@@ -657,7 +664,7 @@ const styles = StyleSheet.create({
     borderTopColor: HAIRLINE,
   },
   rowPressed: {
-    backgroundColor: '#F4F6FA',
+    backgroundColor: palette.fieldDisabled,
   },
   rowNumber: {
     width: 20,
@@ -863,3 +870,4 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
 });
+};

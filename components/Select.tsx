@@ -3,11 +3,9 @@ import React, { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Menu, Text } from 'react-native-paper';
 
-import { Colors } from '@/constants/Colors';
+import type { Palette } from '@/constants/Colors';
+import { useThemed } from '@/lib/theme';
 
-const palette = Colors.light;
-const INK = palette.text;
-const MUTED = palette.secondaryText;
 
 export type SelectOption = { key: string; label: string; selected: boolean; onSelect: () => void };
 
@@ -28,6 +26,8 @@ export function Select({
   style?: object;
 }) {
   const [visible, setVisible] = useState(false);
+  const { palette, styles } = useThemed(makeStyles);
+  const MUTED = palette.secondaryText;
   const [width, setWidth] = useState(0);
   return (
     <View style={style} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
@@ -67,7 +67,10 @@ export function Select({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (palette: Palette) => {
+  const INK = palette.text;
+  const MUTED = palette.secondaryText;
+  return StyleSheet.create({
   selectLabel: {
     color: MUTED,
     fontSize: 13,
@@ -85,7 +88,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#C9D2E3',
+    borderColor: palette.field,
     backgroundColor: palette.surface,
   },
   selectOpen: {
@@ -94,7 +97,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
   },
   selectDisabled: {
-    backgroundColor: '#F4F6FA',
+    backgroundColor: palette.fieldDisabled,
     opacity: 0.7,
   },
   selectValue: {
@@ -118,3 +121,4 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 });
+};

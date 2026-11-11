@@ -1,6 +1,6 @@
 import { BottomTabBar, type BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import React, { createContext, useCallback, useContext, useMemo, useRef } from 'react';
-import { Colors } from '@/constants/Colors';
+import { useTheme } from '@/lib/theme';
 import { Animated, type NativeScrollEvent, type NativeSyntheticEvent, StyleSheet } from 'react-native';
 
 type ScrollHandler = (e: NativeSyntheticEvent<NativeScrollEvent>) => void;
@@ -60,8 +60,9 @@ export function useHideTabBarOnScroll() {
 // The regular bottom tab bar, anchored at the bottom and slid off screen by the shared offset.
 export function HidingTabBar(props: BottomTabBarProps) {
   const ctx = useContext(TabBarContext);
+  const { palette } = useTheme();
   return (
-    <Animated.View style={[styles.wrap, ctx && { transform: [{ translateY: ctx.translateY }] }]}>
+    <Animated.View style={[styles.wrap, { backgroundColor: palette.surface }, ctx && { transform: [{ translateY: ctx.translateY }] }]}>
       <BottomTabBar {...props} />
     </Animated.View>
   );
@@ -69,5 +70,5 @@ export function HidingTabBar(props: BottomTabBarProps) {
 
 const styles = StyleSheet.create({
   // Opaque so nothing behind the bar shows through, including the safe-area strip under it.
-  wrap: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: Colors.light.surface },
+  wrap: { position: 'absolute', left: 0, right: 0, bottom: 0, },
 });

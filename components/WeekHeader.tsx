@@ -5,7 +5,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from 'react-native-paper';
 
 import { Select } from '@/components/Select';
-import { Colors } from '@/constants/Colors';
+import type { Palette } from '@/constants/Colors';
+import { useThemed } from '@/lib/theme';
 import { MONTHS } from '@/lib/dates';
 import { MenuButton } from '@/lib/sideMenu';
 import {
@@ -17,7 +18,6 @@ import {
   relationToNow,
 } from '@/lib/weeks';
 
-const palette = Colors.light;
 
 export type WeekHeaderProps = {
   /** Monday of the selected week. */
@@ -32,6 +32,7 @@ export type WeekHeaderProps = {
 // State lives in the parent (value / onChange) so it can load the program for the chosen week.
 export function WeekHeader({ value, onChange, onLogout, congregation, title = 'Vida y Ministerio' }: WeekHeaderProps) {
   const insets = useSafeAreaInsets();
+  const { palette, styles } = useThemed(makeStyles);
   const { month, year } = monthOfWeek(value);
   const range = formatWeekRange(value);
   const relation = relationToNow(value);
@@ -134,7 +135,8 @@ export function WeekHeader({ value, onChange, onLogout, congregation, title = 'V
 // Spacing scale: 4, 8, 12, 16, 20, 24. Two weights only: 400 and 500.
 // One container owns the 20 px side padding, so title, selects, week box and the logout icon share the same edges.
 // Vertical rhythm: 16 above the title, then 16 / 16 / 16 (header -> month and year -> week box -> next section).
-const styles = StyleSheet.create({
+const makeStyles = (palette: Palette) => {
+  return StyleSheet.create({
   block: { paddingHorizontal: 20, paddingBottom: 16 },
   header: { paddingBottom: 16 },
   titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
@@ -162,3 +164,4 @@ const styles = StyleSheet.create({
   weekRelation: { color: palette.secondaryText, fontSize: 12, lineHeight: 16, fontWeight: '400' },
   weekRelationNow: { color: palette.primary, fontWeight: '500' },
 });
+};

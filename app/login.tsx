@@ -3,11 +3,11 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Keyboard, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { Button, Text, TextInput as PaperInput } from 'react-native-paper';
 
-import { Colors } from '@/constants/Colors';
+import { Colors, type Palette } from '@/constants/Colors';
 import { API_URL } from '@/constants/api';
 import { LoginError, useAuth } from '@/lib/auth';
+import { useThemed } from '@/lib/theme';
 
-const palette = Colors.light;
 
 // Palette taken from the meeting program: teal (Tesoros), gold (Seamos mejores maestros),
 // wine red (Nuestra vida cristiana) on white, with neutral gray text.
@@ -20,6 +20,10 @@ const PROGRAM = {
   line: '#BDBDBD',
 } as const;
 
+// Dark mode: the same program colors, with neutral text/lines taken from the dark palette.
+const programFor = (p: Palette) =>
+  p === Colors.dark ? { ...PROGRAM, ink: p.text, muted: p.secondaryText, line: p.field, wine: p.badText } : PROGRAM;
+
 const MESSAGES = {
   credentials: 'Usuario o contraseña incorrectos. Revisa los datos e inténtalo de nuevo.',
   network: `No hay conexión con el servidor (${API_URL}). Comprueba que el backend esté en marcha.`,
@@ -27,6 +31,8 @@ const MESSAGES = {
 } as const;
 
 export default function LoginScreen() {
+  const { palette, styles } = useThemed(makeStyles);
+  const program = programFor(palette);
   const { signIn } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -81,9 +87,9 @@ export default function LoginScreen() {
         automaticallyAdjustKeyboardInsets>
         <Text style={styles.title}>Asignaciones</Text>
         <View style={styles.rule} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-          <View style={[styles.ruleSegment, { backgroundColor: PROGRAM.teal }]} />
-          <View style={[styles.ruleSegment, { backgroundColor: PROGRAM.gold }]} />
-          <View style={[styles.ruleSegment, { backgroundColor: PROGRAM.wine }]} />
+          <View style={[styles.ruleSegment, { backgroundColor: program.teal }]} />
+          <View style={[styles.ruleSegment, { backgroundColor: program.gold }]} />
+          <View style={[styles.ruleSegment, { backgroundColor: program.wine }]} />
         </View>
 
         <View style={styles.form}>
@@ -102,8 +108,8 @@ export default function LoginScreen() {
               onSubmitEditing={() => passwordRef.current?.focus()}
               style={styles.input}
               outlineStyle={styles.inputOutline}
-              outlineColor={PROGRAM.line}
-              activeOutlineColor={PROGRAM.teal}
+              outlineColor={program.line}
+              activeOutlineColor={program.teal}
             />
           </View>
 
@@ -124,12 +130,12 @@ export default function LoginScreen() {
               onSubmitEditing={submit}
               style={styles.input}
               outlineStyle={styles.inputOutline}
-              outlineColor={PROGRAM.line}
-              activeOutlineColor={PROGRAM.teal}
+              outlineColor={program.line}
+              activeOutlineColor={program.teal}
               right={
                 <PaperInput.Icon
                   icon={() => (
-                    <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={PROGRAM.muted} />
+                    <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={program.muted} />
                   )}
                   onPress={() => setShowPassword((v) => !v)}
                   accessibilityLabel={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
@@ -149,7 +155,7 @@ export default function LoginScreen() {
             onPress={submit}
             disabled={!canSubmit}
             loading={submitting}
-            buttonColor={PROGRAM.teal}
+            buttonColor={program.teal}
             textColor="#FFFFFF"
             style={styles.button}
             contentStyle={styles.buttonContent}
@@ -162,7 +168,9 @@ export default function LoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (palette: Palette) => {
+  const program = programFor(palette);
+  return StyleSheet.create({
   flex: { flex: 1, backgroundColor: palette.surface },
   content: {
     flexGrow: 1,
@@ -172,7 +180,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   title: {
-    color: PROGRAM.ink,
+    color: program.ink,
     fontSize: 32,
     fontWeight: '800',
     letterSpacing: -0.8,
@@ -181,19 +189,19 @@ const styles = StyleSheet.create({
   ruleSegment: { width: 28, height: 4, borderRadius: 2 },
   form: { gap: 16 },
   label: {
-    color: PROGRAM.muted,
+    color: program.muted,
     fontSize: 13,
     fontWeight: '600',
     marginBottom: 6,
   },
   input: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: palette.surface,
     minHeight: 48,
     fontSize: 16,
   },
   inputOutline: { borderRadius: 10 },
   error: {
-    color: PROGRAM.wine,
+    color: program.wine,
     fontSize: 14,
     lineHeight: 20,
   },
@@ -201,3 +209,4 @@ const styles = StyleSheet.create({
   buttonContent: { minHeight: 48 },
   buttonLabel: { fontSize: 16, fontWeight: '700' },
 });
+};

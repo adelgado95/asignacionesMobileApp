@@ -3,12 +3,11 @@ import { usePathname, useRouter, type Href } from 'expo-router';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, BackHandler, Dimensions, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Text } from 'react-native-paper';
+import { Switch, Text } from 'react-native-paper';
 
-import { Colors } from '@/constants/Colors';
+import type { Palette } from '@/constants/Colors';
 import { useAuth } from '@/lib/auth';
-
-const palette = Colors.light;
+import { useTheme, useThemed } from '@/lib/theme';
 const WIDTH = Math.min(320, Math.round(Dimensions.get('window').width * 0.82));
 
 type Ctx = { open: () => void; close: () => void };
@@ -35,6 +34,8 @@ export function SideMenuProvider({ children }: { children: React.ReactNode }) {
   const [visible, setVisible] = useState(false); // mounted/interactive
   const progress = useRef(new Animated.Value(0)).current; // 0 closed, 1 open
   const insets = useSafeAreaInsets();
+  const { palette, styles } = useThemed(makeStyles);
+  const { isDark, toggle } = useTheme();
   const router = useRouter();
   const pathname = usePathname();
   const { signOut } = useAuth();
@@ -71,7 +72,7 @@ export function SideMenuProvider({ children }: { children: React.ReactNode }) {
       <View style={styles.root}>
         {children}
         {visible && (
-          <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+          <View style={[StyleSheet.absoluteFill, { pointerEvents: 'box-none' }]}>
             <Animated.View style={[styles.scrim, { opacity: progress }]}>
               <Pressable style={StyleSheet.absoluteFill} onPress={close} accessibilityLabel="Cerrar menú" />
             </Animated.View>
@@ -129,6 +130,12 @@ export function SideMenuProvider({ children }: { children: React.ReactNode }) {
                 ))}
               </ScrollView>
 
+              <View style={[styles.item, styles.themeRow]}>
+                <Ionicons name={isDark ? 'moon' : 'moon-outline'} size={22} color={palette.text} />
+                <Text style={styles.itemText}>Modo oscuro</Text>
+                <Switch value={isDark} onValueChange={toggle} accessibilityLabel="Modo oscuro" />
+              </View>
+
               <Pressable
                 onPress={() => {
                   close();
@@ -155,6 +162,7 @@ export function useSideMenu() {
 // Hamburger button for screen headers.
 export function MenuButton() {
   const { open } = useSideMenu();
+  const { palette, styles } = useThemed(makeStyles);
   return (
     <Pressable
       onPress={open}
@@ -168,7 +176,7 @@ export function MenuButton() {
 }
 
 // Spacing scale 4/8/12/16/20/24, touch targets >= 44 px.
-const styles = StyleSheet.create({
+const makeStyles = (palette: Palette) => StyleSheet.create({
   root: { flex: 1 },
   scrim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(31,42,61,0.45)' },
   panel: {
@@ -200,6 +208,7 @@ const styles = StyleSheet.create({
   pressed: { backgroundColor: palette.border },
   badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: palette.background },
   badgeText: { color: palette.secondaryText, fontSize: 12, lineHeight: 16, fontWeight: '500' },
+  themeRow: { marginHorizontal: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: palette.border, borderRadius: 0 },
   logout: { marginHorizontal: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: palette.border, borderRadius: 0 },
   iconButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 22 },
   menuButton: { marginLeft: -10 }, // the 26 px icon's edge meets the screen margin

@@ -2,15 +2,16 @@ import React from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Text } from 'react-native-paper';
 
-import { Colors } from '@/constants/Colors';
+import type { Palette } from '@/constants/Colors';
+import { useThemed } from '@/lib/theme';
 import { useAuth } from '@/lib/auth';
 import { MenuButton } from '@/lib/sideMenu';
 
-const palette = Colors.light;
 
 // Screen title with the sign-out action always at the top right, the same on every tab.
 export function ScreenHeader({ title }: { title: string }) {
   const { signOut } = useAuth();
+  const { styles } = useThemed(makeStyles);
   return (
     <View style={styles.row}>
       <MenuButton />
@@ -24,9 +25,11 @@ export function ScreenHeader({ title }: { title: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (palette: Palette) => {
+  return StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   title: { flex: 1, color: palette.text, fontSize: 26, fontWeight: '800' },
   signOut: { minHeight: 40, justifyContent: 'center', paddingHorizontal: 4 },
   signOutText: { color: palette.primary, fontSize: 14, fontWeight: '600' },
 });
+};

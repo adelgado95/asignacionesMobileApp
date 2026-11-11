@@ -1,40 +1,14 @@
-import { DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useMemo } from 'react';
 import 'react-native-reanimated';
 
-import { Colors } from '@/constants/Colors';
-import { MD3LightTheme, PaperProvider } from 'react-native-paper';
+import { MD3DarkTheme, MD3LightTheme, PaperProvider } from 'react-native-paper';
 
 import { AuthProvider, useAuth } from '@/lib/auth';
-
-const navTheme = {
-  ...DefaultTheme,
-  colors: {
-    ...DefaultTheme.colors,
-    background: Colors.light.background,
-    card: Colors.light.surface,
-    text: Colors.light.text,
-    primary: Colors.light.primary,
-    border: Colors.light.border,
-  },
-};
-
-const paperTheme = {
-  ...MD3LightTheme,
-  colors: {
-    ...MD3LightTheme.colors,
-    primary: Colors.light.primary,
-    onPrimary: '#FFFFFF',
-    background: Colors.light.background,
-    surface: Colors.light.surface,
-    onSurface: Colors.light.text,
-    outline: Colors.light.border,
-    secondary: '#25A59A',
-    error: Colors.light.danger,
-  },
-};
+import { AppThemeProvider, useTheme } from '@/lib/theme';
 
 function RootNavigator() {
   const { status } = useAuth();
@@ -56,6 +30,56 @@ function RootNavigator() {
   );
 }
 
+// Navigation + Paper themes follow the palette chosen with the dark-mode switch.
+function ThemedApp() {
+  const { palette, isDark } = useTheme();
+
+  const navTheme = useMemo(() => {
+    const base = isDark ? DarkTheme : DefaultTheme;
+    return {
+      ...base,
+      colors: {
+        ...base.colors,
+        background: palette.background,
+        card: palette.surface,
+        text: palette.text,
+        primary: palette.primary,
+        border: palette.border,
+      },
+    };
+  }, [palette, isDark]);
+
+  const paperTheme = useMemo(() => {
+    const base = isDark ? MD3DarkTheme : MD3LightTheme;
+    return {
+      ...base,
+      colors: {
+        ...base.colors,
+        primary: palette.primary,
+        onPrimary: palette.onPrimary,
+        background: palette.background,
+        surface: palette.surface,
+        onSurface: palette.text,
+        onSurfaceVariant: palette.secondaryText,
+        outline: palette.border,
+        secondary: '#25A59A',
+        error: palette.danger,
+      },
+    };
+  }, [palette, isDark]);
+
+  return (
+    <ThemeProvider value={navTheme}>
+      <PaperProvider theme={paperTheme}>
+        <AuthProvider>
+          <RootNavigator />
+        </AuthProvider>
+        <StatusBar style={isDark ? 'light' : 'dark'} />
+      </PaperProvider>
+    </ThemeProvider>
+  );
+}
+
 export default function RootLayout() {
   const [loaded] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
@@ -67,13 +91,8 @@ export default function RootLayout() {
   }
 
   return (
-    <ThemeProvider value={navTheme}>
-      <PaperProvider theme={paperTheme}>
-        <AuthProvider>
-          <RootNavigator />
-        </AuthProvider>
-      <StatusBar style="dark" />
-      </PaperProvider>
-    </ThemeProvider>
+    <AppThemeProvider>
+      <ThemedApp />
+    </AppThemeProvider>
   );
 }

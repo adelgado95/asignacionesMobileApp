@@ -28,10 +28,14 @@ business rules and API). All UI text is Spanish, sentence case. Notes from the w
 - Saved time from the backend ≠ 0:00 → the play button is **disabled** until that stopwatch has been used in this session (fix times in Django admin).
 - **Autosave 3 s after pausing** (`POST /api/vymc/{id}/tiempo/`); resuming inside the 3 s cancels it. During those 3 s a short **"Reiniciar"** appears (discards this session's time, back to the saved value); after saving it disappears. "Tiempo guardado" shows for 2 s then vanishes. On error: "No se pudo guardar. Reintentar" (no automatic retry loop). No manual save button, no permanent reset.
 
+## Dark mode and side menu
+- `lib/theme.tsx`: `AppThemeProvider` (light by default, choice persisted in SecureStore / localStorage on web), `useTheme()`, `useThemed(makeStyles)`. Palettes `Colors.light` / `Colors.dark` in `constants/Colors.ts` (same keys incl. `onPrimary`, `field`, `okText`/`badText`/`warnText`). **Every screen/component builds styles with `const makeStyles = (palette: Palette) => StyleSheet.create(...)` + `useThemed(makeStyles)`; never use a module-level `Colors.light` in new code.** `app/_layout.tsx` feeds the palette to the react-navigation and Paper themes and the status bar. Program colors (section bars, dots) stay fixed. Template leftovers (`explore`, `Collapsible`, `Themed*`) still use `Colors.light` and are hidden/unused.
+- `lib/sideMenu.tsx`: custom drawer (no extra dependency) opened by `MenuButton` in `WeekHeader`/`ScreenHeader`: sections, "Próximamente" placeholders, **Modo oscuro** switch, logout.
+- Privilegios screen: per-person attendance with 3 states (null pendiente / true asistió / false no asistió). Only users whose Person is anciano or siervo_ministerial (`puede_marcar` from the API) see the ✓/✗ buttons; everyone else sees a read-only status. One-shot (buttons disabled once saved or for past meetings; corrections in Django admin). `POST /api/programa-privilegios/{id}/asistio/`; needs the backend with migration 0003 deployed.
+
 ## Design preferences (from the user)
 - Clean, minimal, mobile-first (small screens, large touch targets ≥ 44 px), forms with comboboxes, Spanish copy.
 - WeekHeader spacing scale 4/8/12/16/20/24, 20 px side padding in a single container, no extra horizontal margins on children. Max two font weights in that component.
-- Project only has a light palette (`constants/Colors.ts`); there is no dark theme despite `userInterfaceStyle: automatic`.
 
 ## Build an APK
 - **Local build without Expo/EAS (preferred):** `./scripts/build-apk-local.sh <url>` copies the project to `~/apk-build/app`, `npm ci`, `expo prebuild --platform android`, `gradlew assembleRelease` with `EXPO_PUBLIC_API_URL=<url>`; APK lands in `~/apk-build/out/asignaciones-<date>.apk`. Default ABI `arm64-v8a` only (`ABIS=` to change), debug-signed (installable, not for Play Store). First build took ~16 min; later ones are much faster. The first APK was built on 2026-11-09 against production and its bundle was verified to contain the URL; it has not been tried on a phone by me. Rebuild after any code change to see it on the phone.

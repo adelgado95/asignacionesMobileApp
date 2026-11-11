@@ -4,13 +4,13 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Button, Text } from 'react-native-paper';
 
 import { ScreenHeader } from '@/components/ScreenHeader';
-import { Colors } from '@/constants/Colors';
+import type { Palette } from '@/constants/Colors';
+import { useThemed } from '@/lib/theme';
 import { API_URL } from '@/constants/api';
 import { useAuth } from '@/lib/auth';
 import { MONTHS, parseDay } from '@/lib/dates';
 import { useHideTabBarOnScroll } from '@/lib/tabBarVisibility';
 
-const palette = Colors.light;
 
 type Tipo = 'privilegio' | 'vymc' | 'asignacion';
 type Dia = { fecha: string; dia: string; partes: { tipo: Tipo; texto: string }[] };
@@ -24,6 +24,7 @@ const DOT: Record<Tipo, string> = {
 };
 
 export default function MisPartesScreen() {
+  const { palette, styles } = useThemed(makeStyles);
   const { authFetch } = useAuth();
   const scrollProps = useHideTabBarOnScroll();
   const [data, setData] = useState<Response | null>(null);
@@ -125,7 +126,8 @@ export default function MisPartesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (palette: Palette) => {
+  return StyleSheet.create({
   page: { flex: 1, backgroundColor: palette.surface },
   content: { paddingHorizontal: 20, paddingTop: 52, paddingBottom: 120, gap: 16 },
   subtitle: { color: palette.secondaryText, fontSize: 13 },
@@ -147,3 +149,4 @@ const styles = StyleSheet.create({
   dot: { width: 8, height: 8, borderRadius: 4, marginTop: 7 },
   partText: { flex: 1, color: palette.text, fontSize: 15, lineHeight: 21 },
 });
+};
