@@ -5,6 +5,7 @@ import { ActivityIndicator, Button, Text } from 'react-native-paper';
 
 import { ScreenHeader } from '@/components/ScreenHeader';
 import type { Palette } from '@/constants/Colors';
+import { useOnDataChange } from '@/lib/dataSync';
 import { useThemed } from '@/lib/theme';
 import { API_URL } from '@/constants/api';
 import { useAuth } from '@/lib/auth';
@@ -31,15 +32,17 @@ export default function MisPartesScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (silent = false) => {
     setError(false);
     try {
       const res = await authFetch('/api/mis-partes/?format=json');
       if (!res.ok) throw new Error(String(res.status));
       setData(await res.json());
     } catch {
-      setData(null);
-      setError(true);
+      if (!silent) {
+        setData(null);
+        setError(true);
+      }
     } finally {
       setLoading(false);
     }
@@ -51,6 +54,7 @@ export default function MisPartesScreen() {
       load();
     }, [load]),
   );
+  useOnDataChange(() => load(true));
 
   // Days grouped by month, in date order.
   const months = useMemo(() => {
@@ -79,7 +83,7 @@ export default function MisPartesScreen() {
         <View style={styles.centered}>
           <Text style={styles.emptyTitle}>No hay conexión con el servidor</Text>
           <Text style={styles.emptyText}>Comprueba que el backend esté en marcha en {API_URL} y vuelve a intentarlo.</Text>
-          <Button mode="outlined" onPress={load} style={styles.retry}>
+          <Button mode="outlined" onPress={() => load()} style={styles.retry}>
             Reintentar
           </Button>
         </View>

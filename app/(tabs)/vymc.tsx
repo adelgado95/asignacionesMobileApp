@@ -5,6 +5,7 @@ import { ActivityIndicator, Button, Text } from 'react-native-paper';
 import { WeekHeader } from '@/components/WeekHeader';
 import { useHideTabBarOnScroll } from '@/lib/tabBarVisibility';
 import type { Palette } from '@/constants/Colors';
+import { useOnDataChange } from '@/lib/dataSync';
 import { useThemed } from '@/lib/theme';
 import { API_URL } from '@/constants/api';
 import { useAuth } from '@/lib/auth';
@@ -232,8 +233,9 @@ export default function VyMCScreen() {
   const { month, year } = monthOfWeek(weekStart);
   const sw = useStopwatches();
 
-  const load = async () => {
-    setLoading(true);
+  // `silent`: background refresh (data changed on the server / re-sync): no spinner, and a failure keeps what is shown.
+  const load = async (silent = false) => {
+    if (!silent) setLoading(true);
     setError(false);
     try {
       const res = await authFetch(`/api/vymc/?format=json&month=${month}&year=${year}`);
@@ -241,8 +243,10 @@ export default function VyMCScreen() {
       const json = await res.json();
       setWeeks(Array.isArray(json) ? json : []);
     } catch {
-      setWeeks([]);
-      setError(true);
+      if (!silent) {
+        setWeeks([]);
+        setError(true);
+      }
     } finally {
       setLoading(false);
     }
@@ -251,6 +255,7 @@ export default function VyMCScreen() {
   useEffect(() => {
     load();
   }, [month, year]);
+  useOnDataChange(() => load(true));
 
   const keyOf = (t: RowTimer) => `${t.weekId}:${t.numero}`;
 
@@ -382,7 +387,7 @@ export default function VyMCScreen() {
           <Text style={styles.emptyText}>
             Comprueba que el backend esté en marcha en {API_URL} y vuelve a intentarlo.
           </Text>
-          <Button mode="outlined" onPress={load} style={styles.retry}>
+          <Button mode="outlined" onPress={() => load()} style={styles.retry}>
             Reintentar
           </Button>
         </View>

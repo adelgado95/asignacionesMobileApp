@@ -6,12 +6,14 @@ import { StyleSheet } from 'react-native';
 import { HapticTab } from '@/components/HapticTab';
 import TabBarBackground from '@/components/ui/TabBarBackground';
 import { useTheme } from '@/lib/theme';
+import { DataSyncProvider } from '@/lib/dataSync';
 import { SideMenuProvider } from '@/lib/sideMenu';
 import { HidingTabBar, TabBarVisibilityProvider } from '@/lib/tabBarVisibility';
 
 export default function TabLayout() {
   const { palette } = useTheme();
   return (
+    <DataSyncProvider>
     <TabBarVisibilityProvider>
     <SideMenuProvider>
     <Tabs
@@ -68,5 +70,6 @@ export default function TabLayout() {
     </Tabs>
     </SideMenuProvider>
     </TabBarVisibilityProvider>
+    </DataSyncProvider>
   );
 }

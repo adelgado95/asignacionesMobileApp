@@ -15,7 +15,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#387C88"
       },
       "edgeToEdgeEnabled": true,
       "package": "com.ajdfdelgado.asignacionesMobileApp"

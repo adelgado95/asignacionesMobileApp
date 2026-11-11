@@ -7,6 +7,7 @@ import { ScreenHeader } from '@/components/ScreenHeader';
 import { useHideTabBarOnScroll } from '@/lib/tabBarVisibility';
 import { Select } from '@/components/Select';
 import type { Palette } from '@/constants/Colors';
+import { useOnDataChange } from '@/lib/dataSync';
 import { useThemed } from '@/lib/theme';
 import { API_URL } from '@/constants/api';
 import { useAuth } from '@/lib/auth';
@@ -65,8 +66,9 @@ export default function PrivilegiosScreen() {
   const [month, setMonth] = useState(today.getMonth() + 1);
   const [year, setYear] = useState(today.getFullYear());
 
-  const load = async () => {
-    setLoading(true);
+  // `silent`: background refresh (data changed on the server / re-sync): no spinner, and a failure keeps what is shown.
+  const load = async (silent = false) => {
+    if (!silent) setLoading(true);
     setError(false);
     try {
       const res = await authFetch(`/api/programa-privilegios/?format=json&month=${month}&year=${year}`);
@@ -75,8 +77,10 @@ export default function PrivilegiosScreen() {
       // Solo hoy y las reuniones futuras.
       setData(Array.isArray(json) ? json.filter((p: Programa) => p.fecha >= TODAY_ISO) : []);
     } catch {
-      setData([]);
-      setError(true);
+      if (!silent) {
+        setData([]);
+        setError(true);
+      }
     } finally {
       setLoading(false);
     }
@@ -85,6 +89,7 @@ export default function PrivilegiosScreen() {
   useEffect(() => {
     load();
   }, [month, year]);
+  useOnDataChange(() => load(true));
 
   // Registra si la persona cumplió su privilegio (solo ancianos y siervos ministeriales: `puede_marcar`).
   // Es de un solo uso: pendiente -> asistió / no asistió; después los botones quedan desactivados
@@ -155,7 +160,7 @@ export default function PrivilegiosScreen() {
           <Text style={styles.emptyText}>
             Comprueba que el backend esté en marcha en {API_URL} y vuelve a intentarlo.
           </Text>
-          <Button mode="outlined" onPress={load} style={styles.retry}>
+          <Button mode="outlined" onPress={() => load()} style={styles.retry}>
             Reintentar
           </Button>
         </View>

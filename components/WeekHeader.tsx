@@ -8,6 +8,7 @@ import { Select } from '@/components/Select';
 import type { Palette } from '@/constants/Colors';
 import { useThemed } from '@/lib/theme';
 import { MONTHS } from '@/lib/dates';
+import { ResyncButton } from '@/components/ResyncButton';
 import { MenuButton } from '@/lib/sideMenu';
 import {
   RELATION_LABEL,
@@ -66,14 +67,17 @@ export function WeekHeader({ value, onChange, onLogout, congregation, title = 'V
             <Text style={styles.congregation}>{congregation}</Text>
           </View>
         </View>
-        <Pressable
-          onPress={onLogout}
-          accessibilityRole="button"
-          accessibilityLabel="Cerrar sesión"
-          hitSlop={8}
-          style={({ pressed }) => [styles.iconButton, styles.logout, pressed && styles.pressed]}>
-          <Ionicons name="log-out-outline" size={22} color={palette.text} />
-        </Pressable>
+        <View style={styles.actions}>
+          <ResyncButton />
+          <Pressable
+            onPress={onLogout}
+            accessibilityRole="button"
+            accessibilityLabel="Cerrar sesión"
+            hitSlop={8}
+            style={({ pressed }) => [styles.iconButton, styles.logout, pressed && styles.pressed]}>
+            <Ionicons name="log-out-outline" size={22} color={palette.text} />
+          </Pressable>
+        </View>
       </View>
       </View>
 
@@ -144,6 +148,7 @@ const makeStyles = (palette: Palette) => {
   title: { color: palette.text, fontSize: 22, lineHeight: 28, fontWeight: '500' },
   congregationRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   congregation: { flexShrink: 1, color: palette.secondaryText, fontSize: 13, lineHeight: 16, fontWeight: '400' },
+  actions: { flexDirection: 'row', alignItems: 'center' },
   iconButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 22 },
   // The 22 px icon sits centered in a 44 px target: pull the target out by 10 so the icon's edge meets the right margin.
   logout: { marginRight: -10 },

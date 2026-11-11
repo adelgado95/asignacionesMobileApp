@@ -13,6 +13,7 @@ import {
 } from 'react-native-paper';
 
 import type { Palette } from '@/constants/Colors';
+import { useOnDataChange } from '@/lib/dataSync';
 import { useThemed } from '@/lib/theme';
 import { API_URL } from '@/constants/api';
 import { ScreenHeader } from '@/components/ScreenHeader';
@@ -242,8 +243,9 @@ export default function HomeScreen() {
     setSelectedItem(null);
   };
 
-  const loadData = async () => {
-    setLoading(true);
+  // `silent`: background refresh (data changed on the server / re-sync): no spinner, and a failure keeps what is shown.
+  const loadData = async (silent = false) => {
+    if (!silent) setLoading(true);
     setError(false);
 
     try {
@@ -252,8 +254,10 @@ export default function HomeScreen() {
       const json = await res.json();
       setData(Array.isArray(json) ? json : []);
     } catch {
-      setData([]);
-      setError(true);
+      if (!silent) {
+        setData([]);
+        setError(true);
+      }
     } finally {
       setLoading(false);
     }
@@ -262,6 +266,7 @@ export default function HomeScreen() {
   useEffect(() => {
     loadData();
   }, [month, year]);
+  useOnDataChange(() => loadData(true));
 
   const handlePatch = async () => {
     if (!selectedItem) return;
@@ -509,7 +514,7 @@ export default function HomeScreen() {
           <Text style={styles.emptyText}>
             Comprueba que el backend esté en marcha en {API_URL} y vuelve a intentarlo.
           </Text>
-          <Button mode="outlined" onPress={loadData} style={styles.retryButton}>
+          <Button mode="outlined" onPress={() => loadData()} style={styles.retryButton}>
             Reintentar
           </Button>
         </View>
