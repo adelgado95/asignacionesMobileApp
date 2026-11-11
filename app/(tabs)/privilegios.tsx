@@ -186,35 +186,42 @@ export default function PrivilegiosScreen() {
                       <View style={styles.row}>
                         <View style={styles.who}>
                           <Text style={styles.label}>{it.label}</Text>
+                          <View style={styles.asistioSlot}>
+                          {person && (
+                          <>
+                            {p.puede_marcar ? (
+                              <View style={styles.asistio}>
+                                <Pressable
+                                  onPress={() => markAsistio(p, it.key, true)}
+                                  disabled={locked}
+                                  hitSlop={6}
+                                  accessibilityRole="button"
+                                  accessibilityLabel={`Asistió: ${it.label}, ${person.name}`}
+                                  accessibilityState={{ disabled: locked, selected: state === true }}
+                                  style={[styles.mark, { borderColor: palette.success }, state === true && { backgroundColor: palette.success }, locked && state !== true && styles.markDim]}>
+                                  <Ionicons name="checkmark" size={17} color={state === true ? palette.onPrimary : palette.success} />
+                                </Pressable>
+                                <Pressable
+                                  onPress={() => markAsistio(p, it.key, false)}
+                                  disabled={locked}
+                                  hitSlop={6}
+                                  accessibilityRole="button"
+                                  accessibilityLabel={`No asistió: ${it.label}, ${person.name}`}
+                                  accessibilityState={{ disabled: locked, selected: state === false }}
+                                  style={[styles.mark, { borderColor: palette.danger }, state === false && { backgroundColor: palette.danger }, locked && state !== false && styles.markDim]}>
+                                  <Ionicons name="close" size={17} color={state === false ? palette.onPrimary : palette.danger} />
+                                </Pressable>
+                              </View>
+                            ) : (
+                              <Text style={[styles.asistioText, state === true && { color: palette.okText }, state === false && { color: palette.badText }]}>
+                                {state === true ? 'Asistió' : state === false ? 'No asistió' : 'Pendiente'}
+                              </Text>
+                            )}
+                          </>
+                      )}
+                          </View>
                           <Text style={[styles.value, !person && styles.empty]}>{person?.name ?? '—'}</Text>
                         </View>
-                        {person &&
-                          (p.puede_marcar ? (
-                            <View style={styles.asistio}>
-                              <Pressable
-                                onPress={() => markAsistio(p, it.key, true)}
-                                disabled={locked}
-                                accessibilityRole="button"
-                                accessibilityLabel={`Asistió: ${it.label}, ${person.name}`}
-                                accessibilityState={{ disabled: locked, selected: state === true }}
-                                style={[styles.mark, { borderColor: palette.success }, state === true && { backgroundColor: palette.success }, locked && state !== true && styles.markDim]}>
-                                <Ionicons name="checkmark" size={22} color={state === true ? palette.onPrimary : palette.success} />
-                              </Pressable>
-                              <Pressable
-                                onPress={() => markAsistio(p, it.key, false)}
-                                disabled={locked}
-                                accessibilityRole="button"
-                                accessibilityLabel={`No asistió: ${it.label}, ${person.name}`}
-                                accessibilityState={{ disabled: locked, selected: state === false }}
-                                style={[styles.mark, { borderColor: palette.danger }, state === false && { backgroundColor: palette.danger }, locked && state !== false && styles.markDim]}>
-                                <Ionicons name="close" size={22} color={state === false ? palette.onPrimary : palette.danger} />
-                              </Pressable>
-                            </View>
-                          ) : (
-                            <Text style={[styles.asistioText, state === true && { color: palette.okText }, state === false && { color: palette.badText }]}>
-                              {state === true ? 'Asistió' : state === false ? 'No asistió' : 'Pendiente'}
-                            </Text>
-                          ))}
                       </View>
                       {failed?.id === id && <Text style={styles.failed}>{failed.msg}</Text>}
                     </View>
@@ -268,12 +275,13 @@ const makeStyles = (palette: Palette) => {
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: palette.border,
   },
-  who: { flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
-  label: { color: palette.secondaryText, fontSize: 15 },
-  value: { color: INK, fontSize: 16, fontWeight: '700', flexShrink: 1, textAlign: 'right' },
-  asistio: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  asistioText: { color: palette.secondaryText, fontSize: 13, fontWeight: '600' },
-  mark: { width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  who: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  label: { width: 96, color: palette.secondaryText, fontSize: 14 }, // fixed width: the buttons line up across rows
+  value: { color: INK, fontSize: 16, fontWeight: '700', flex: 1, textAlign: 'right' },
+  asistioSlot: { width: 72, justifyContent: 'center' }, // fixed width so the names line up across rows
+  asistio: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  asistioText: { color: palette.secondaryText, fontSize: 12, fontWeight: '600' },
+  mark: { width: 28, height: 28, borderRadius: 14, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   markDim: { opacity: 0.3 },
   failed: { color: palette.badText, fontSize: 13, paddingBottom: 6 },
   empty: { color: palette.tabIconDefault, fontWeight: '400' },
