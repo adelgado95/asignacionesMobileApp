@@ -7,6 +7,7 @@ import { Text } from 'react-native-paper';
 import { Select } from '@/components/Select';
 import { Colors } from '@/constants/Colors';
 import { MONTHS } from '@/lib/dates';
+import { MenuButton } from '@/lib/sideMenu';
 import {
   RELATION_LABEL,
   addWeeks,
@@ -54,6 +55,7 @@ export function WeekHeader({ value, onChange, onLogout, congregation, title = 'V
     <View style={styles.block}>
       <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
       <View style={styles.titleRow}>
+        <MenuButton />
         <View style={styles.titleBlock}>
           <Text style={styles.title} accessibilityRole="header">
             {title}

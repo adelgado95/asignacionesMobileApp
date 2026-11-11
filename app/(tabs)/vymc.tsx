@@ -292,8 +292,15 @@ export default function VyMCScreen() {
           elapsed={elapsed}
           running={running}
           over={t.limit ? elapsed > t.limit * 60000 : false}
-          // Time already recorded in the backend: shown, but not restartable until used in this session.
-          disabled={!sw.timers[key] && t.saved > 0}
+          // Time already stored in the backend (loaded, or just autosaved from this session): shown, but locked.
+          // It stays enabled while running (to pause) and while there is unsaved time (resuming cancels the autosave,
+          // and after a failed save the user can still continue). Fix times in Django admin.
+          disabled={
+            !running &&
+            t.saved > 0 &&
+            sw.syncing[key] !== 'error' &&
+            (sw.syncing[key] === 'saving' || Math.round(elapsed / 1000) === t.saved)
+          }
           onToggle={() => {
             sw.setSync(key, undefined);
             sw.hideSaved(key);

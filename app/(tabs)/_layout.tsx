@@ -6,11 +6,13 @@ import { StyleSheet } from 'react-native';
 import { HapticTab } from '@/components/HapticTab';
 import TabBarBackground from '@/components/ui/TabBarBackground';
 import { Colors } from '@/constants/Colors';
+import { SideMenuProvider } from '@/lib/sideMenu';
 import { HidingTabBar, TabBarVisibilityProvider } from '@/lib/tabBarVisibility';
 
 export default function TabLayout() {
   return (
     <TabBarVisibilityProvider>
+    <SideMenuProvider>
     <Tabs
       tabBar={(props) => <HidingTabBar {...props} />}
       initialRouteName="vymc"
@@ -63,6 +65,7 @@ export default function TabLayout() {
       />
       <Tabs.Screen name="explore" options={{ href: null }} />
     </Tabs>
+    </SideMenuProvider>
     </TabBarVisibilityProvider>
   );
 }

@@ -4,6 +4,7 @@ import { Text } from 'react-native-paper';
 
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/lib/auth';
+import { MenuButton } from '@/lib/sideMenu';
 
 const palette = Colors.light;
 
@@ -12,6 +13,7 @@ export function ScreenHeader({ title }: { title: string }) {
   const { signOut } = useAuth();
   return (
     <View style={styles.row}>
+      <MenuButton />
       <Text style={styles.title} numberOfLines={2}>
         {title}
       </Text>
