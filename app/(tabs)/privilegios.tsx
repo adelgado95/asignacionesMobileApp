@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Button, Text } from 'react-native-paper';
@@ -60,6 +60,8 @@ export default function PrivilegiosScreen() {
   const { authFetch } = useAuth();
   const { palette, styles } = useThemed(makeStyles);
   const scrollProps = useHideTabBarOnScroll();
+  const scrollRef = useRef<ScrollView>(null);
+  const scrolledFor = useRef('');
   const [data, setData] = useState<Programa[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -74,8 +76,8 @@ export default function PrivilegiosScreen() {
       const res = await authFetch(`/api/programa-privilegios/?format=json&month=${month}&year=${year}`);
       if (!res.ok) throw new Error(String(res.status));
       const json = await res.json();
-      // Solo hoy y las reuniones futuras.
-      setData(Array.isArray(json) ? json.filter((p: Programa) => p.fecha >= TODAY_ISO) : []);
+      // Todas las reuniones del mes; la pantalla se desplaza a la de hoy o a la próxima.
+      setData(Array.isArray(json) ? json : []);
     } catch {
       if (!silent) {
         setData([]);
@@ -87,6 +89,8 @@ export default function PrivilegiosScreen() {
   };
 
   useEffect(() => {
+    scrolledFor.current = '';
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
     load();
   }, [month, year]);
   useOnDataChange(() => load(true));
@@ -122,7 +126,7 @@ export default function PrivilegiosScreen() {
   const nextId = data.find((p) => p.fecha >= TODAY_ISO)?.id;
 
   return (
-    <ScrollView style={styles.page} contentContainerStyle={styles.content} {...scrollProps}>
+    <ScrollView ref={scrollRef} style={styles.page} contentContainerStyle={styles.content} {...scrollProps}>
       <ScreenHeader title="Privilegios" />
 
       <View style={styles.formRow}>
@@ -167,13 +171,22 @@ export default function PrivilegiosScreen() {
       ) : data.length === 0 ? (
         <View style={styles.centered}>
           <Text style={styles.emptyTitle}>
-            Sin reuniones próximas en {MONTHS[month - 1].label.toLowerCase()} de {year}
+            Sin reuniones en {MONTHS[month - 1].label.toLowerCase()} de {year}
           </Text>
-          <Text style={styles.emptyText}>Solo se muestran las reuniones de hoy en adelante. Prueba con otro mes.</Text>
+          <Text style={styles.emptyText}>Prueba con otro mes.</Text>
         </View>
       ) : (
         data.map((p) => (
-          <View key={p.id} style={[styles.card, p.id === nextId && styles.cardNext]}>
+          <View
+            key={p.id}
+            style={[styles.card, p.id === nextId && styles.cardNext]}
+            onLayout={(e) => {
+              // Una vez por mes/año: desplaza a la reunión de hoy o la próxima (las pasadas quedan arriba).
+              const key = `${month}-${year}`;
+              if (p.id !== nextId || scrolledFor.current === key) return;
+              scrolledFor.current = key;
+              scrollRef.current?.scrollTo({ y: Math.max(0, e.nativeEvent.layout.y - 12), animated: false });
+            }}>
             <View style={styles.cardHead}>
               <Text style={styles.cardTitle}>{longDate(p.fecha)}</Text>
               {p.id === nextId && <Text style={styles.nextTag}>Próxima</Text>}

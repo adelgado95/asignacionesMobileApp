@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import React from 'react';
 import { StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HapticTab } from '@/components/HapticTab';
 import TabBarBackground from '@/components/ui/TabBarBackground';
@@ -12,6 +13,7 @@ import { HidingTabBar, TabBarVisibilityProvider } from '@/lib/tabBarVisibility';
 
 export default function TabLayout() {
   const { palette } = useTheme();
+  const insets = useSafeAreaInsets(); // system nav bar (3-button / gesture) height under edge-to-edge
   return (
     <DataSyncProvider>
     <TabBarVisibilityProvider>
@@ -31,8 +33,8 @@ export default function TabLayout() {
         },
         // Full-width bar flush with the bottom edge; HidingTabBar anchors it and slides it away on scroll.
         tabBarStyle: {
-          height: 72,
-          paddingBottom: 8,
+          height: 72 + insets.bottom,
+          paddingBottom: 8 + insets.bottom,
           backgroundColor: palette.surface,
           borderTopWidth: StyleSheet.hairlineWidth,
           borderTopColor: palette.border,
@@ -53,7 +55,7 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="index"
+        name="escuela"
         options={{
           title: 'Escuela',
           tabBarIcon: ({ color }) => <Ionicons name="school-outline" size={28} color={color} />,
@@ -66,6 +68,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <Ionicons name="person-outline" size={28} color={color} />,
         }}
       />
+      <Tabs.Screen name="index" options={{ href: null }} />
       <Tabs.Screen name="explore" options={{ href: null }} />
     </Tabs>
     </SideMenuProvider>

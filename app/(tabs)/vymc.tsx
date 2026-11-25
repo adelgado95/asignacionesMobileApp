@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, AppState, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Button, Text } from 'react-native-paper';
 
 import { WeekHeader } from '@/components/WeekHeader';
@@ -232,6 +232,8 @@ export default function VyMCScreen() {
   const [weekStart, setWeekStart] = useState(() => getWeekStart(new Date()));
   const { month, year } = monthOfWeek(weekStart);
   const sw = useStopwatches();
+  // Cronómetros en uso (candados del backend): clave `semana:numero` -> quién y si es mío.
+  const [locks, setLocks] = useState<Record<string, { por: string; mio: boolean }>>({});
 
   // `silent`: background refresh (data changed on the server / re-sync): no spinner, and a failure keeps what is shown.
   const load = async (silent = false) => {
@@ -258,6 +260,60 @@ export default function VyMCScreen() {
   useOnDataChange(() => load(true));
 
   const keyOf = (t: RowTimer) => `${t.weekId}:${t.numero}`;
+
+  const loadLocks = async () => {
+    try {
+      const res = await authFetch('/api/cronometros/?format=json');
+      if (!res.ok) return;
+      const rows: { semana: number; numero: number; por: string; mio: boolean }[] = await res.json();
+      setLocks(Object.fromEntries(rows.map((c) => [`${c.semana}:${c.numero}`, { por: c.por, mio: c.mio }])));
+    } catch {
+      // sin red: se conserva lo último que se vio
+    }
+  };
+
+  // Consulta quién usa qué cronómetro cada 5 s mientras la app está activa (y al volver a primer plano).
+  useEffect(() => {
+    loadLocks();
+    const id = setInterval(() => {
+      if (AppState.currentState === 'active') loadLocks();
+    }, 5000);
+    const sub = AppState.addEventListener('change', (st) => st === 'active' && loadLocks());
+    return () => {
+      clearInterval(id);
+      sub.remove();
+    };
+  }, []);
+
+  // Pide el candado del cronómetro al backend: 'ok' = es nuestro, 'busy' = lo usa otra persona, 'error' = sin respuesta.
+  const claim = async (t: RowTimer, accion: 'iniciar' | 'latido'): Promise<'ok' | 'busy' | 'error'> => {
+    try {
+      const res = await authFetch('/api/cronometros/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ semana: t.weekId, numero: t.numero, accion }),
+      });
+      if (res.ok) return 'ok';
+      if (res.status === 409) {
+        const j = await res.json().catch(() => ({}));
+        setLocks((prev) => ({ ...prev, [keyOf(t)]: { por: j?.por ?? 'otra persona', mio: false } }));
+        if (accion === 'iniciar') Alert.alert('Cronómetro en uso', `Hay otra persona usando este cronómetro (${j?.por ?? 'otra persona'}).`);
+        return 'busy';
+      }
+    } catch {
+      // cae abajo
+    }
+    if (accion === 'iniciar') Alert.alert('Sin conexión', 'No se pudo verificar si otra persona usa este cronómetro. Inténtalo de nuevo.');
+    return 'error';
+  };
+
+  const release = (t: RowTimer) => {
+    authFetch('/api/cronometros/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ semana: t.weekId, numero: t.numero, accion: 'liberar' }),
+    }).then(loadLocks, () => {});
+  };
 
   // Pauses the stopwatch and stores its time for that part (the study is saved on the week).
   const syncPart = async (t: RowTimer) => {
@@ -305,15 +361,20 @@ export default function VyMCScreen() {
           // It stays enabled while running (to pause) and while there is unsaved time (resuming cancels the autosave,
           // and after a failed save the user can still continue). Fix times in Django admin.
           disabled={
-            !running &&
+            (!running && !!locks[key] && !locks[key].mio) || // otra persona lo está usando
+            (!running &&
             t.saved > 0 &&
             sw.syncing[key] !== 'error' &&
-            (sw.syncing[key] === 'saving' || Math.round(elapsed / 1000) === t.saved)
+            (sw.syncing[key] === 'saving' || Math.round(elapsed / 1000) === t.saved))
           }
           onToggle={() => {
-            sw.setSync(key, undefined);
-            sw.hideSaved(key);
-            sw.toggle(key, t.saved);
+            const start = () => {
+              sw.setSync(key, undefined);
+              sw.hideSaved(key);
+              sw.toggle(key, t.saved);
+            };
+            if (running) return start(); // pausar no requiere candado
+            claim(t, 'iniciar').then((res) => res === 'ok' && start());
           }}
         />
       ),
@@ -325,7 +386,10 @@ export default function VyMCScreen() {
           sync={sw.syncing[key]}
           justSaved={!!sw.flash[key]}
           onSync={() => syncPart(t)}
-          onReset={() => sw.reset(key, t.saved)}
+          onReset={() => {
+            sw.reset(key, t.saved);
+            release(t);
+          }}
         />
       ) : undefined,
     };
@@ -366,6 +430,30 @@ export default function VyMCScreen() {
   }, [allTimers, sw.timers, sw.syncing]);
 
   useEffect(() => () => Object.values(pending.current).forEach(clearTimeout), []);
+
+  // Latido: mientras un cronómetro corre se renueva su candado cada 3 s (caduca a los 45 s sin latido).
+  // Si otra persona lo tomó entretanto (p. ej. la app estuvo en segundo plano), se pausa aquí.
+  const heartbeat = useRef<() => void>(() => {});
+  const beating = useRef<Record<string, boolean>>({});
+  heartbeat.current = () => {
+    for (const t of allTimers) {
+      const key = keyOf(t);
+      if (sw.timers[key]?.startedAt == null || beating.current[key]) continue; // sin latidos apilados si la red va lenta
+      beating.current[key] = true;
+      claim(t, 'latido').then((res) => {
+        beating.current[key] = false;
+        if (res !== 'busy') return; // un fallo de red no pausa el cronómetro
+        sw.toggle(keyOf(t), t.saved);
+        Alert.alert('Cronómetro en uso', 'Otra persona tomó este cronómetro; se pausó el tuyo.');
+      });
+    }
+  };
+  const anyRunning = Object.values(sw.timers).some((x) => x.startedAt !== null);
+  useEffect(() => {
+    if (!anyRunning) return;
+    const id = setInterval(() => heartbeat.current(), 3000);
+    return () => clearInterval(id);
+  }, [anyRunning]);
 
   // The program of the selected week, if the backend has one.
   const weekIso = toISODate(weekStart);

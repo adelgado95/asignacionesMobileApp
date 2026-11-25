@@ -17,7 +17,7 @@ type IconName = React.ComponentProps<typeof Ionicons>['name'];
 const SECTIONS: { label: string; icon: IconName; href: Href; path: string }[] = [
   { label: 'VyMC', icon: 'book-outline', href: '/vymc', path: '/vymc' },
   { label: 'Privilegios', icon: 'people-outline', href: '/privilegios', path: '/privilegios' },
-  { label: 'Escuela', icon: 'school-outline', href: '/', path: '/' },
+  { label: 'Escuela', icon: 'school-outline', href: '/escuela', path: '/escuela' },
   { label: 'Mis partes', icon: 'person-outline', href: '/mis-partes', path: '/mis-partes' },
 ];
 
