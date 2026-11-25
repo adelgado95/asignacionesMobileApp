@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Linking, Pressable, ScrollView, Share, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Button, Text } from 'react-native-paper';
 
 import { ScreenHeader } from '@/components/ScreenHeader';
@@ -54,6 +54,31 @@ const TODAY_ISO = `${today.getFullYear()}-${String(today.getMonth() + 1).padStar
 const isPast = (fecha: string) => {
   const d = new Date();
   return fecha < `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+// Texto para WhatsApp (*negritas*): la reunión y quién tiene cada privilegio asignado.
+const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+const whatsappText = (p: Programa) => {
+  const lines = [`*Privilegios – ${cap(longDate(p.fecha))}*`];
+  for (const g of GROUPS) {
+    const rows = g.items.filter((it) => p[it.key]).map((it) => `${it.label}: ${(p[it.key] as Person).name}`);
+    if (rows.length) lines.push('', `*${g.title}*`, ...rows);
+  }
+  return lines.join('\n');
+};
+
+// Abre WhatsApp con el mensaje listo para elegir el chat; si no se puede, usa el menú de compartir del sistema.
+const sendToWhatsApp = async (p: Programa) => {
+  const text = whatsappText(p);
+  try {
+    await Linking.openURL(`https://wa.me/?text=${encodeURIComponent(text)}`);
+  } catch {
+    try {
+      await Share.share({ message: text });
+    } catch {
+      // el usuario canceló
+    }
+  }
 };
 
 export default function PrivilegiosScreen() {
@@ -190,6 +215,14 @@ export default function PrivilegiosScreen() {
             <View style={styles.cardHead}>
               <Text style={styles.cardTitle}>{longDate(p.fecha)}</Text>
               {p.id === nextId && <Text style={styles.nextTag}>Próxima</Text>}
+              <Pressable
+                onPress={() => sendToWhatsApp(p)}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={`Enviar por WhatsApp los privilegios de ${longDate(p.fecha)}`}
+                style={styles.share}>
+                <Ionicons name="logo-whatsapp" size={24} color="#25D366" />
+              </Pressable>
             </View>
             {GROUPS.map((g) => (
               <View key={g.title} style={styles.group}>
@@ -280,6 +313,7 @@ const makeStyles = (palette: Palette) => {
   cardNext: { borderColor: palette.primary, borderWidth: 2 },
   cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   cardTitle: { color: INK, fontSize: 18, fontWeight: '800', textTransform: 'capitalize', flexShrink: 1 },
+  share: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginRight: -8, marginVertical: -8 },
   nextTag: { color: palette.primary, fontSize: 13, fontWeight: '700' },
 
   group: { gap: 2 },
