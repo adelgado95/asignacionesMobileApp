@@ -270,23 +270,37 @@ export default function VyMCScreen() {
 
   const keyOf = (t: RowTimer) => `${t.weekId}:${t.numero}`;
 
+  // Sello de cambios visto en la última consulta; si cambia (alguien guardó un tiempo u otro dato), se recarga el programa.
+  const lastStamp = useRef<string | null>(null);
+  const loadRef = useRef(load);
+  loadRef.current = load;
+  const polling = useRef(false);
+
   const loadLocks = async () => {
+    if (polling.current) return;
+    polling.current = true;
     try {
       const res = await authFetch(`/api/cronometros/?format=json&cliente=${CLIENT_ID}`);
       if (!res.ok) return;
-      const rows: { semana: number; numero: number; por: string; mio: boolean }[] = await res.json();
-      setLocks(Object.fromEntries(rows.map((c) => [`${c.semana}:${c.numero}`, { por: c.por, mio: c.mio }])));
+      const json: { cronometros: { semana: number; numero: number; por: string; mio: boolean }[]; timestamp?: string } = await res.json();
+      // Primero los datos y después los candados: así, cuando otra persona guarda y libera, este cronómetro ya
+      // muestra el tiempo guardado (y queda bloqueado) en lugar de volver a habilitarse con el valor viejo.
+      if (json.timestamp && lastStamp.current !== null && json.timestamp !== lastStamp.current) await loadRef.current(true);
+      if (json.timestamp) lastStamp.current = json.timestamp;
+      setLocks(Object.fromEntries(json.cronometros.map((c) => [`${c.semana}:${c.numero}`, { por: c.por, mio: c.mio }])));
     } catch {
       // sin red: se conserva lo último que se vio
+    } finally {
+      polling.current = false;
     }
   };
 
-  // Consulta quién usa qué cronómetro cada 5 s mientras la app está activa (y al volver a primer plano).
+  // Consulta quién usa qué cronómetro cada 3 s mientras la app está activa (y al volver a primer plano).
   useEffect(() => {
     loadLocks();
     const id = setInterval(() => {
       if (AppState.currentState === 'active') loadLocks();
-    }, 5000);
+    }, 3000);
     const sub = AppState.addEventListener('change', (st) => st === 'active' && loadLocks());
     return () => {
       clearInterval(id);
