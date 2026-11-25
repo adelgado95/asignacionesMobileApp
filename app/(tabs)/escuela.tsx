@@ -446,6 +446,7 @@ export default function HomeScreen() {
       <View style={styles.form}>
         <View style={styles.formRow}>
           <Select
+            compact
             style={styles.monthField}
             label="Mes"
             value={monthLabel}
@@ -461,6 +462,7 @@ export default function HomeScreen() {
             }))}
           />
           <Select
+            compact
             style={styles.yearField}
             label="Año"
             value={String(year)}
@@ -474,6 +476,7 @@ export default function HomeScreen() {
         </View>
 
         <Select
+          compact
           label="Sala"
           value={selectedRoom ?? 'Todas las salas'}
           disabled={roomOptions.length === 0}
@@ -489,6 +492,7 @@ export default function HomeScreen() {
         />
 
         <Select
+          compact
           label="Día"
           value={selectedDay ? longDate(selectedDay) : 'Todos los días'}
           disabled={dayOptions.length === 0}
@@ -600,7 +604,7 @@ const makeStyles = (palette: Palette) => {
   },
   pageContent: {
     paddingHorizontal: 20,
-    paddingTop: 52,
+    paddingTop: 0,
     paddingBottom: 120, // clear the floating tab bar
     gap: 18,
   },

@@ -133,7 +133,7 @@ export default function MisPartesScreen() {
 const makeStyles = (palette: Palette) => {
   return StyleSheet.create({
   page: { flex: 1, backgroundColor: palette.surface },
-  content: { paddingHorizontal: 20, paddingTop: 52, paddingBottom: 120, gap: 16 },
+  content: { paddingHorizontal: 20, paddingTop: 0, paddingBottom: 120, gap: 16 },
   subtitle: { color: palette.secondaryText, fontSize: 13 },
   month: { color: palette.secondaryText, fontSize: 13, fontWeight: '700', textTransform: 'capitalize', marginBottom: 4 },
 

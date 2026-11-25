@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, AppState, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Button, Text } from 'react-native-paper';
 
+import { CONGREGATION } from '@/constants/congregation';
 import { WeekHeader } from '@/components/WeekHeader';
 import { useHideTabBarOnScroll } from '@/lib/tabBarVisibility';
 import type { Palette } from '@/constants/Colors';
@@ -21,7 +22,6 @@ const SECTION = {
   acomodadores: '#3D5A6C',
 } as const;
 
-const CONGREGATION = 'Avenida Central León';
 const SERIF = Platform.select({ ios: 'Georgia', android: 'serif', default: 'Georgia, serif' });
 
 // ---------- API shape (GET /api/vymc/) ----------

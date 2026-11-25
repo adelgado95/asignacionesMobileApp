@@ -20,7 +20,7 @@ business rules and API). All UI text is Spanish, sentence case. Notes from the w
   - (old note) "Escuela": assignments by month/room/day, edit sheet (attendance, notes, minutes+seconds), its **own** stopwatch copy with "Guardar tiempo"/"Reiniciar" buttons (not refactored to the shared one).
   - `vymc.tsx`: weekly meeting program from `/api/vymc/`. Header is `WeekHeader` (title, congregation, logout icon, Mes/Año, week arrows). A week belongs to the month of its Monday; changing month/year jumps to that month's first Monday; weeks with no program show "Sin programa del …". Section colors tesoros `#575A5D`, maestros `#BE8900`, vida `#7E0024`, acomodadores `#3D5A6C`. Row layout: title + stopwatch on one line, people as "Etiqueta  Valor" lines below.
   - `privilegios.tsx`: all meetings of the month (`/api/programa-privilegios/`), auto-scrolls once per month to today's or the next meeting ("Próxima" marker); past ones stay visible (attendance locked).
-  - `discursos.tsx`: Discursos públicos from `/api/discursos-publicos/?month=&year=` (nombre, congregación, fecha, contacto, canción), whole month, auto-scroll once to today's/next ("Próximo"), same layout as Privilegios, read-only.
+  - `discursos.tsx`: Discursos públicos from `/api/discursos-publicos/?month=&year=` (título, nombre, congregación, fecha, contacto, canción), whole month, auto-scroll once to today's/next ("Próximo"), same layout as Privilegios, read-only.
   - `mis-partes.tsx`: `/api/mis-partes/`, compact day rows grouped by month, dots teal=privilegio, wine=VyMC, gold=asignación; shows a message if the user has no Person linked; refreshes on focus.
 - `lib/`: `auth.tsx` (`useAuth`, `authFetch` with one in-flight refresh), `tokenStorage.ts` (expo-secure-store; localStorage on web), `weeks.ts` (pure Mon–Sun helpers), `dates.ts`, `types.ts`.
 - `components/`: `Select` (Paper Menu combobox; `compact` = 44 px), `ScreenHeader` (title + "Cerrar sesión" text, used by Escuela/Privilegios/Mis partes), `WeekHeader`, `Stopwatch` (`TimerControl`, `TimerActions`, `useStopwatches`).
@@ -54,5 +54,5 @@ business rules and API). All UI text is Spanish, sentence case. Notes from the w
 - `app/login.tsx`: on Android (edge-to-edge, no window resize) the scroll content gets `paddingBottom = 48 + keyboard height` from `Keyboard` events and scrolls to the end on focus; iOS uses `KeyboardAvoidingView`. Added to fix the keyboard covering the password field; not yet confirmed on a device. Fallback if it still fails: `react-native-keyboard-controller` (new dependency).
 
 ## Open items
-- Escuela still has its own stopwatch/buttons; align with VyMC if the user asks. `ScreenHeader` (text logout) differs from `WeekHeader` (icon logout).
+- Escuela still has its own stopwatch/buttons; align with VyMC if the user asks. (`ScreenHeader` now mirrors `WeekHeader`: title 22/500 + congregation line from `constants/congregation.ts`, resync + logout icon, top safe-area inset handled in the header, so screens use `paddingTop: 0` and 20 px side padding; month/year/room/day selects are `compact`.)
 - Seamos mejores maestros people appear only once Asignaciones for Nov–Dec are loaded in the backend.

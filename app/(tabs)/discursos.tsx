@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Button, Text } from 'react-native-paper';
 
@@ -14,6 +15,7 @@ import { MONTHS, YEARS, longDate } from '@/lib/dates';
 
 type Discurso = {
   id: number;
+  titulo: string;
   nombre: string;
   congregacion: string;
   fecha: string;
@@ -31,6 +33,7 @@ export default function DiscursosScreen() {
   const scrollProps = useHideTabBarOnScroll();
   const scrollRef = useRef<ScrollView>(null);
   const scrolledFor = useRef('');
+  const nextY = useRef<number | null>(null); // posición de la tarjeta de hoy / próxima
   const [data, setData] = useState<Discurso[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -58,10 +61,18 @@ export default function DiscursosScreen() {
 
   useEffect(() => {
     scrolledFor.current = '';
+    nextY.current = null;
     scrollRef.current?.scrollTo({ y: 0, animated: false });
     load();
   }, [month, year]);
   useOnDataChange(() => load(true));
+
+  // Cada vez que se entra a la pestaña, se vuelve a la reunión de hoy o la próxima (las pestañas siguen montadas).
+  useFocusEffect(
+    useCallback(() => {
+      if (nextY.current !== null) scrollRef.current?.scrollTo({ y: nextY.current, animated: false });
+    }, []),
+  );
 
   const nextId = data.find((d) => d.fecha >= TODAY_ISO)?.id;
 
@@ -71,6 +82,7 @@ export default function DiscursosScreen() {
 
       <View style={styles.formRow}>
         <Select
+          compact
           style={styles.monthField}
           label="Mes"
           value={MONTHS[month - 1].label}
@@ -82,6 +94,7 @@ export default function DiscursosScreen() {
           }))}
         />
         <Select
+          compact
           style={styles.yearField}
           label="Año"
           value={String(year)}
@@ -121,16 +134,20 @@ export default function DiscursosScreen() {
             key={d.id}
             style={[styles.card, d.id === nextId && styles.cardNext]}
             onLayout={(e) => {
-              // Una vez por mes/año: desplaza al discurso de hoy o al próximo (los pasados quedan arriba).
+              // Al cargar el mes/año: desplaza al discurso de hoy o al próximo (los pasados quedan arriba).
+              if (d.id !== nextId) return;
+              const y = Math.max(0, e.nativeEvent.layout.y - 12);
+              nextY.current = y; // para volver aquí al entrar de nuevo a la pestaña
               const key = `${month}-${year}`;
-              if (d.id !== nextId || scrolledFor.current === key) return;
+              if (scrolledFor.current === key) return;
               scrolledFor.current = key;
-              scrollRef.current?.scrollTo({ y: Math.max(0, e.nativeEvent.layout.y - 12), animated: false });
+              scrollRef.current?.scrollTo({ y, animated: false });
             }}>
             <View style={styles.cardHead}>
               <Text style={styles.cardTitle}>{longDate(d.fecha)}</Text>
               {d.id === nextId && <Text style={styles.nextTag}>Próximo</Text>}
             </View>
+            <Row styles={styles} label="Título" value={d.titulo} />
             <Row styles={styles} label="Nombre" value={d.nombre} />
             <Row styles={styles} label="Congregación" value={d.congregacion} />
             <Row styles={styles} label="Contacto" value={d.contacto} />
@@ -154,9 +171,9 @@ function Row({ styles, label, value }: { styles: ReturnType<typeof makeStyles>; 
 const makeStyles = (palette: Palette) =>
   StyleSheet.create({
     page: { flex: 1, backgroundColor: palette.background },
-    content: { paddingHorizontal: 16, paddingTop: 52, paddingBottom: 120, gap: 16 },
+    content: { paddingHorizontal: 20, paddingTop: 0, paddingBottom: 120, gap: 16 },
     formRow: { flexDirection: 'row', gap: 12 },
-    monthField: { flex: 2 },
+    monthField: { flex: 1.4 },
     yearField: { flex: 1 },
 
     centered: { paddingVertical: 40, gap: 6 },

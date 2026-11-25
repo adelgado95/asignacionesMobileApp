@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { Linking, Pressable, ScrollView, Share, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Button, Text } from 'react-native-paper';
@@ -87,6 +88,7 @@ export default function PrivilegiosScreen() {
   const scrollProps = useHideTabBarOnScroll();
   const scrollRef = useRef<ScrollView>(null);
   const scrolledFor = useRef('');
+  const nextY = useRef<number | null>(null); // posición de la tarjeta de hoy / próxima
   const [data, setData] = useState<Programa[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -115,10 +117,18 @@ export default function PrivilegiosScreen() {
 
   useEffect(() => {
     scrolledFor.current = '';
+    nextY.current = null;
     scrollRef.current?.scrollTo({ y: 0, animated: false });
     load();
   }, [month, year]);
   useOnDataChange(() => load(true));
+
+  // Cada vez que se entra a la pestaña, se vuelve a la reunión de hoy o la próxima (las pestañas siguen montadas).
+  useFocusEffect(
+    useCallback(() => {
+      if (nextY.current !== null) scrollRef.current?.scrollTo({ y: nextY.current, animated: false });
+    }, []),
+  );
 
   // Registra si la persona cumplió su privilegio (solo ancianos y siervos ministeriales: `puede_marcar`).
   // Es de un solo uso: pendiente -> asistió / no asistió; después los botones quedan desactivados
@@ -156,6 +166,7 @@ export default function PrivilegiosScreen() {
 
       <View style={styles.formRow}>
         <Select
+          compact
           style={styles.monthField}
           label="Mes"
           value={MONTHS[month - 1].label}
@@ -167,6 +178,7 @@ export default function PrivilegiosScreen() {
           }))}
         />
         <Select
+          compact
           style={styles.yearField}
           label="Año"
           value={String(year)}
@@ -206,11 +218,14 @@ export default function PrivilegiosScreen() {
             key={p.id}
             style={[styles.card, p.id === nextId && styles.cardNext]}
             onLayout={(e) => {
-              // Una vez por mes/año: desplaza a la reunión de hoy o la próxima (las pasadas quedan arriba).
+              // Al cargar el mes/año: desplaza a la reunión de hoy o la próxima (las pasadas quedan arriba).
+              if (p.id !== nextId) return;
+              const y = Math.max(0, e.nativeEvent.layout.y - 12);
+              nextY.current = y; // para volver aquí al entrar de nuevo a la pestaña
               const key = `${month}-${year}`;
-              if (p.id !== nextId || scrolledFor.current === key) return;
+              if (scrolledFor.current === key) return;
               scrolledFor.current = key;
-              scrollRef.current?.scrollTo({ y: Math.max(0, e.nativeEvent.layout.y - 12), animated: false });
+              scrollRef.current?.scrollTo({ y, animated: false });
             }}>
             <View style={styles.cardHead}>
               <Text style={styles.cardTitle}>{longDate(p.fecha)}</Text>
@@ -291,10 +306,10 @@ const makeStyles = (palette: Palette) => {
   const INK = palette.text;
   return StyleSheet.create({
   page: { flex: 1, backgroundColor: palette.background },
-  content: { paddingHorizontal: 16, paddingTop: 52, paddingBottom: 120, gap: 16 },
+  content: { paddingHorizontal: 20, paddingTop: 0, paddingBottom: 120, gap: 16 },
   title: { color: INK, fontSize: 26, fontWeight: '800' },
   formRow: { flexDirection: 'row', gap: 12 },
-  monthField: { flex: 2 },
+  monthField: { flex: 1.4 },
   yearField: { flex: 1 },
 
   centered: { paddingVertical: 40, gap: 6 },
