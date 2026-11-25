@@ -164,6 +164,15 @@ export function useStopwatches() {
   const reset = (key: string, saved: number) =>
     setTimers((prev) => ({ ...prev, [key]: { accumulated: saved * 1000, startedAt: null } }));
 
+  // Forgets this session's local stopwatch so the value stored in the backend is shown (and continued from).
+  const drop = (keys: string[]) =>
+    setTimers((prev) => {
+      if (!keys.some((k) => k in prev)) return prev;
+      const next = { ...prev };
+      keys.forEach((k) => delete next[k]);
+      return next;
+    });
+
   // Shows the "saved" confirmation for 2 seconds.
   const flashSaved = (key: string) => {
     clearTimeout(flashTimers.current[key]);
@@ -178,7 +187,7 @@ export function useStopwatches() {
 
   const setSync = (key: string, state: SyncState) => setSyncing((prev) => ({ ...prev, [key]: state }));
 
-  return { now, timers, syncing, flash, timerFor, toggle, reset, freeze, setSync, flashSaved, hideSaved };
+  return { now, timers, syncing, flash, timerFor, toggle, reset, drop, freeze, setSync, flashSaved, hideSaved };
 }
 
 const makeStyles = (palette: Palette) => {

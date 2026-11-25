@@ -221,6 +221,13 @@ function RowView({
   );
 }
 
+// Id de esta instancia de la app (pestaña/dispositivo): dos instancias del mismo usuario tampoco comparten cronómetro.
+const CLIENT_ID = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+
+// Alert.alert no hace nada en la web: ahí se usa window.alert.
+const notify = (title: string, msg: string) =>
+  Platform.OS === 'web' ? window.alert(`${title}\n${msg}`) : Alert.alert(title, msg);
+
 export default function VyMCScreen() {
   const { palette, styles } = useThemed(makeStyles);
   const { authFetch, signOut } = useAuth();
@@ -232,6 +239,8 @@ export default function VyMCScreen() {
   const [weekStart, setWeekStart] = useState(() => getWeekStart(new Date()));
   const { month, year } = monthOfWeek(weekStart);
   const sw = useStopwatches();
+  // Cronómetros con tiempo local sin guardar (iniciados aquí): solo esos se autoguardan; el resto sigue al servidor.
+  const dirty = useRef<Record<string, boolean>>({});
   // Cronómetros en uso (candados del backend): clave `semana:numero` -> quién y si es mío.
   const [locks, setLocks] = useState<Record<string, { por: string; mio: boolean }>>({});
 
@@ -263,7 +272,7 @@ export default function VyMCScreen() {
 
   const loadLocks = async () => {
     try {
-      const res = await authFetch('/api/cronometros/?format=json');
+      const res = await authFetch(`/api/cronometros/?format=json&cliente=${CLIENT_ID}`);
       if (!res.ok) return;
       const rows: { semana: number; numero: number; por: string; mio: boolean }[] = await res.json();
       setLocks(Object.fromEntries(rows.map((c) => [`${c.semana}:${c.numero}`, { por: c.por, mio: c.mio }])));
@@ -291,19 +300,19 @@ export default function VyMCScreen() {
       const res = await authFetch('/api/cronometros/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ semana: t.weekId, numero: t.numero, accion }),
+        body: JSON.stringify({ semana: t.weekId, numero: t.numero, accion, cliente: CLIENT_ID }),
       });
       if (res.ok) return 'ok';
       if (res.status === 409) {
         const j = await res.json().catch(() => ({}));
         setLocks((prev) => ({ ...prev, [keyOf(t)]: { por: j?.por ?? 'otra persona', mio: false } }));
-        if (accion === 'iniciar') Alert.alert('Cronómetro en uso', `Hay otra persona usando este cronómetro (${j?.por ?? 'otra persona'}).`);
+        if (accion === 'iniciar') notify('Cronómetro en uso', `Hay otra persona usando este cronómetro (${j?.por ?? 'otra persona'}).`);
         return 'busy';
       }
     } catch {
       // cae abajo
     }
-    if (accion === 'iniciar') Alert.alert('Sin conexión', 'No se pudo verificar si otra persona usa este cronómetro. Inténtalo de nuevo.');
+    if (accion === 'iniciar') notify('Sin conexión', 'No se pudo verificar si otra persona usa este cronómetro. Inténtalo de nuevo.');
     return 'error';
   };
 
@@ -311,7 +320,7 @@ export default function VyMCScreen() {
     authFetch('/api/cronometros/', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ semana: t.weekId, numero: t.numero, accion: 'liberar' }),
+      body: JSON.stringify({ semana: t.weekId, numero: t.numero, accion: 'liberar', cliente: CLIENT_ID }),
     }).then(loadLocks, () => {});
   };
 
@@ -324,7 +333,7 @@ export default function VyMCScreen() {
       const res = await authFetch(`/api/vymc/${t.weekId}/tiempo/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ numero: t.numero, tiempo: seconds }),
+        body: JSON.stringify({ numero: t.numero, tiempo: seconds, cliente: CLIENT_ID }),
       });
       if (!res.ok) throw new Error(String(res.status));
       setWeeks((prev) =>
@@ -336,6 +345,7 @@ export default function VyMCScreen() {
               : { ...w, partes: w.partes.map((p) => (p.numero === t.numero ? { ...p, tiempo: seconds } : p)) },
         ),
       );
+      dirty.current[key] = false;
       sw.setSync(key, undefined);
       sw.flashSaved(key);
     } catch {
@@ -369,6 +379,7 @@ export default function VyMCScreen() {
           }
           onToggle={() => {
             const start = () => {
+              dirty.current[key] = true;
               sw.setSync(key, undefined);
               sw.hideSaved(key);
               sw.toggle(key, t.saved);
@@ -387,6 +398,7 @@ export default function VyMCScreen() {
           justSaved={!!sw.flash[key]}
           onSync={() => syncPart(t)}
           onReset={() => {
+            dirty.current[key] = false;
             sw.reset(key, t.saved);
             release(t);
           }}
@@ -414,6 +426,7 @@ export default function VyMCScreen() {
       const timer = sw.timers[key];
       const waiting =
         !!timer &&
+        !!dirty.current[key] && // solo tiempo propio sin guardar; un valor distinto en el servidor no se re-guarda
         timer.startedAt === null &&
         Math.round(timer.accumulated / 1000) !== t.saved &&
         sw.syncing[key] === undefined; // after an error the user retries by hand
@@ -431,6 +444,12 @@ export default function VyMCScreen() {
 
   useEffect(() => () => Object.values(pending.current).forEach(clearTimeout), []);
 
+  // Cuando llegan datos del servidor, un cronómetro pausado sin tiempo propio pendiente vuelve a mostrar lo guardado
+  // (así lo que guardó otra instancia no se vuelve a guardar desde aquí en bucle).
+  useEffect(() => {
+    sw.drop(Object.keys(sw.timers).filter((k) => !dirty.current[k] && !sw.flash[k] && sw.timers[k].startedAt === null));
+  }, [weeks]);
+
   // Latido: mientras un cronómetro corre se renueva su candado cada 3 s (caduca a los 45 s sin latido).
   // Si otra persona lo tomó entretanto (p. ej. la app estuvo en segundo plano), se pausa aquí.
   const heartbeat = useRef<() => void>(() => {});
@@ -444,7 +463,7 @@ export default function VyMCScreen() {
         beating.current[key] = false;
         if (res !== 'busy') return; // un fallo de red no pausa el cronómetro
         sw.toggle(keyOf(t), t.saved);
-        Alert.alert('Cronómetro en uso', 'Otra persona tomó este cronómetro; se pausó el tuyo.');
+        notify('Cronómetro en uso', 'Otra persona tomó este cronómetro; se pausó el tuyo.');
       });
     }
   };
