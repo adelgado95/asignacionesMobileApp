@@ -375,7 +375,7 @@ export default function VyMCScreen() {
             (!running &&
             t.saved > 0 &&
             sw.syncing[key] !== 'error' &&
-            (sw.syncing[key] === 'saving' || Math.round(elapsed / 1000) === t.saved))
+            (sw.syncing[key] === 'saving' || Math.floor(elapsed / 1000) === t.saved))
           }
           onToggle={() => {
             const start = () => {
@@ -428,7 +428,7 @@ export default function VyMCScreen() {
         !!timer &&
         !!dirty.current[key] && // solo tiempo propio sin guardar; un valor distinto en el servidor no se re-guarda
         timer.startedAt === null &&
-        Math.round(timer.accumulated / 1000) !== t.saved &&
+        Math.floor(timer.accumulated / 1000) !== t.saved &&
         sw.syncing[key] === undefined; // after an error the user retries by hand
       if (waiting && !pending.current[key]) {
         pending.current[key] = setTimeout(() => {

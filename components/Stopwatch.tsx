@@ -85,7 +85,7 @@ export function TimerActions({
   const { palette, styles } = useThemed(makeStyles);
   const BAD = palette.badText;
   const OK = palette.okText;
-  const canReset = !running && Math.round(elapsed / 1000) !== saved && sync === undefined;
+  const canReset = !running && Math.floor(elapsed / 1000) !== saved && sync === undefined;
 
   return (
     <View style={styles.timerActions}>
@@ -157,7 +157,7 @@ export function useStopwatches() {
     const total = elapsedOf(timerFor(key, saved), at);
     setTimers((prev) => ({ ...prev, [key]: { accumulated: total, startedAt: null } }));
     setNow(at);
-    return Math.round(total / 1000);
+    return Math.floor(total / 1000);
   };
 
   // Drops the time of the current session and goes back to the saved value.

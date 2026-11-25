@@ -105,7 +105,7 @@ function TimerActions({
   const { palette, styles } = useThemed(makeStyles);
   const STATUS = statusesFor(palette);
   const MUTED = palette.secondaryText;
-  const seconds = Math.round(elapsed / 1000);
+  const seconds = Math.floor(elapsed / 1000);
   const dirty = seconds !== saved;
   const canReset = !running && elapsed > 0;
 
@@ -211,7 +211,7 @@ export default function HomeScreen() {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          tiempo: Math.round(total / 1000),
+          tiempo: Math.floor(total / 1000),
           attended: item.attended ?? 'pendiente',
           notes: item.notes ?? '',
         }),
