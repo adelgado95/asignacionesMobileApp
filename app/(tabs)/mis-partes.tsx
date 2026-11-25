@@ -73,7 +73,7 @@ export default function MisPartesScreen() {
 
   return (
     <ScrollView style={styles.page} contentContainerStyle={styles.content} {...scrollProps}>
-      <ScreenHeader title="Mis partes" />
+      <ScreenHeader title="Mis asignaciones" />
 
       {loading ? (
         <View style={styles.centered}>

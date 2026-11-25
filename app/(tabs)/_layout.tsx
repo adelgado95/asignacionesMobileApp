@@ -20,7 +20,7 @@ export default function TabLayout() {
     <SideMenuProvider>
     <Tabs
       tabBar={(props) => <HidingTabBar {...props} />}
-      initialRouteName="vymc"
+      initialRouteName="mis-partes"
       screenOptions={{
         tabBarActiveTintColor: palette.tint,
         tabBarInactiveTintColor: palette.tabIconDefault,
@@ -40,6 +40,13 @@ export default function TabLayout() {
           borderTopColor: palette.border,
         },
       }}>
+      <Tabs.Screen
+        name="mis-partes"
+        options={{
+          title: 'Asignaciones',
+          tabBarIcon: ({ color }) => <Ionicons name="person-outline" size={28} color={color} />,
+        }}
+      />
       <Tabs.Screen
         name="vymc"
         options={{
@@ -61,13 +68,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <Ionicons name="school-outline" size={28} color={color} />,
         }}
       />
-      <Tabs.Screen
-        name="mis-partes"
-        options={{
-          title: 'Mis partes',
-          tabBarIcon: ({ color }) => <Ionicons name="person-outline" size={28} color={color} />,
-        }}
-      />
+      <Tabs.Screen name="discursos" options={{ href: null }} />
       <Tabs.Screen name="index" options={{ href: null }} />
       <Tabs.Screen name="explore" options={{ href: null }} />
     </Tabs>
